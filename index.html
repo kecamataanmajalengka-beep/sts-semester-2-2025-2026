@@ -2064,7 +2064,7 @@
         return kelasItem.includes(myClassNum);
     }
 
-    // ========== LOAD KOREKSI ==========
+    // ========== LOAD KOREKSI - DENGAN PERHITUNGAN PG OTOMATIS ==========
     function loadKoreksiData() {
         const filterKelas = document.getElementById('filter-koreksi-kelas').value;
         const filterStatus = document.getElementById('filter-koreksi-status').value;
@@ -2072,11 +2072,23 @@
 
         db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
             const data = snap.val() || {};
-            cachePengerjaan = data;
+            cachePengerjaan = data; // Update cache
+            
+            // Kumpulkan mapel yang unik untuk filter (jika perlu)
+            
             let h = "";
             let no = 1;
 
-            Object.keys(data).forEach(uid => {
+            // Kita perlu proses satu per satu untuk mengecek/menghitung PG
+            const keys = Object.keys(data);
+            let processedCount = 0;
+
+            if (keys.length === 0) {
+                document.getElementById('koreksi-list').innerHTML = "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data.</td></tr>";
+                return;
+            }
+
+            keys.forEach(uid => {
                 const item = data[uid];
 
                 if(!canAccessData(item)) return;
@@ -2097,10 +2109,49 @@
                     if (!item.jawaban && !item.selesai) return; 
                 }
 
-                const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
+                // === LOGIKA TAMBAHAN: Hitung Ulang PG Jika Ada Jawaban ===
+                // Ini memastikan nilai PG di tabel selah benar meski sebelumnya belum tersimpan
+                if (isKelasTinggi && item.jawaban && item.mapel && item.kelasKey) {
+                    // Jika nilai_pg belum ada atau 0, coba hitung ulang dari jawaban
+                    // Atau kita bisa selalu hitung ulang untuk memastikan konsistensi
+                    db.ref(`admin_pusat/gudang_soal/${item.mapel}/${item.kelasKey}`).once('value', sSnap => {
+                        const soalData = sSnap.val();
+                        if (soalData) {
+                            let pgBenar = 0;
+                            let pgTotal = 0;
+                            soalData.forEach((s, i) => {
+                                if (s.opsi && s.opsi.length > 0) {
+                                    pgTotal++;
+                                    const kunci = (s.kunci || "a").toLowerCase();
+                                    const jawab = (item.jawaban['pg_' + (i+1)] || "").toLowerCase();
+                                    if (jawab === kunci) pgBenar++;
+                                }
+                            });
+                            
+                            const nilaiPGCalc = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
+                            
+                            // Update item lokal untuk ditampilkan
+                            item.nilai_pg = nilaiPGCalc;
+                            
+                            // Update database jika berbeda (menyimpan permanen)
+                            if (item.nilai_pg !== nilaiPGCalc) {
+                                db.ref(`sekolah/${myNPSN}/pengerjaan/${uid}`).update({ nilai_pg: nilaiPGCalc });
+                            }
+                        }
+                        renderRow(uid, item, no++, isKelasTinggi);
+                        checkFinished();
+                    });
+                } else {
+                    // Langsung render untuk kelas 1-3 atau data tanpa soal
+                    renderRow(uid, item, no++, isKelasTinggi);
+                    checkFinished();
+                }
+            });
 
+            function renderRow(uid, item, idx, isTinggi) {
+                const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
                 h += `<tr>
-                    <td>${no++}</td>
+                    <td>${idx}</td>
                     <td><b>${item.nama}</b></td>
                     <td>${item.kelas || '-'}</td>
                     <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
@@ -2117,9 +2168,31 @@
                         </button>
                     </td>
                 </tr>`;
+            }
+
+            let expectedCount = 0;
+            Object.keys(data).forEach(uid => {
+                 const item = data[uid];
+                 if(!canAccessData(item)) return;
+                 if(filterKelas !== 'semua') { const kelasNum = filterKelas.replace('kelas_', ''); if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return; }
+                 if(filterStatus !== 'semua' && item.status !== filterStatus) return;
+                 if(filterMapel !== 'semua' && item.mapel !== filterMapel) return;
+                 const kelasNum = (item.kelas || "").match(/\d/);
+                 const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+                 if (isKelasTinggi && !item.jawaban && !item.selesai) return;
+                 expectedCount++;
             });
 
-            document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Untuk Kelas 4-6, data muncul setelah siswa ujian.</td></tr>";
+            function checkFinished() {
+                processedCount++;
+                if (processedCount >= expectedCount) {
+                    document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Untuk Kelas 4-6, data muncul setelah siswa ujian.</td></tr>";
+                }
+            }
+            
+            if (expectedCount === 0) {
+                 document.getElementById('koreksi-list').innerHTML = "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data.</td></tr>";
+            }
         });
     }
 
@@ -2295,27 +2368,25 @@
         document.getElementById('manual-nilai-akhir').innerText = akhir;
     }
 
-    // ========== FUNGSI SIMPAN NILAI YANG SUDAH DIPERBAIKI ==========
+    // ========== FUNGSI SIMPAN NILAI FINAL ==========
     function simpanNilai() {
         if(!currentEditUID) return;
         
-        // Ambil data lama dari cache untuk menjaga integritas data
         const oldData = cachePengerjaan[currentEditUID];
         if (!oldData) return alert("Data tidak ditemukan di memori.");
 
-        let updates = {}; // Object update utama
+        let updates = {}; 
 
         const calculatedPG = document.getElementById('calculated-nilai-pg');
         
         if (calculatedPG) {
             // === MODE KELAS TINGGI ===
             
-            // 1. Hitung nilai Essay
             const inputs = document.querySelectorAll('.input-nilai-essay');
             let totalEssay = 0;
             let countEssay = 0;
             
-            // Siapkan object jawaban update dengan MENYALIN data lama (penting!)
+            // Salin data lama ke update
             let jawabanUpdate = { ...(oldData.jawaban || {}) };
 
             inputs.forEach(input => {
@@ -2325,7 +2396,6 @@
                 totalEssay += nilaiInput;
                 countEssay++;
                 
-                // Update nilai essay di object jawaban
                 jawabanUpdate['nilai_'+nomor] = nilaiInput;
             });
 
@@ -2333,19 +2403,17 @@
             const nilaiEssay = countEssay > 0 ? Math.round(totalEssay / countEssay) : 0;
             const nilaiAkhir = Math.round((nilaiPG + nilaiEssay) / 2);
 
-            // 2. Susun update utama
             updates = {
                 nilai_pg: nilaiPG,
                 nilai_essay: nilaiEssay,
                 nilai: nilaiAkhir,
                 status: 'Selesai',
                 selesai: true,
-                // PENTING: Masukkan object jawaban yang sudah diupdate ke sini
                 jawaban: jawabanUpdate 
             };
 
         } else {
-            // === MODE MANUAL (KELAS 1-3) ===
+            // === MODE MANUAL ===
             const pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
             const essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
             const akhir = Math.round((pg + essay) / 2);
@@ -2358,7 +2426,6 @@
             };
         }
 
-        // 3. Eksekusi update ke Database
         db.ref(`sekolah/${myNPSN}/pengerjaan/${currentEditUID}`).update(updates)
             .then(() => { 
                 alert("Nilai berhasil disimpan!"); 
