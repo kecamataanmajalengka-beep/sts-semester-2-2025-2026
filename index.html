@@ -2199,41 +2199,46 @@
         const isEssay = !s.opsi || s.opsi.length === 0;
         const nomor = i + 1;
         
-        html += `<div class="soal-box">
+        // 1. Buka Kotak Soal
+        html += `<div class="soal-box" style="clear:both;"> 
+        .soal-box {
+    overflow: hidden; /* Mencegah elemen di dalam keluar */
+    clear: both;      /* Mencegah tumpang tindih dengan elemen sebelumnya */
+}
             <div class="soal-nomor">
                 <span>No. ${nomor}</span>
                 <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
             </div>
             <div class="soal-text">${s.tanya || s.pertanyaan || '-'}</div>`;
         
+        // 2. Tambah Gambar jika ada
         if(s.img || s.i) {
             html += `<img src="${s.img || s.i}" style="max-width:100%; border-radius:8px; margin:8px 0;">`;
         }
 
-        // ========== PERBAIKAN DIMULAI DI SINI ==========
+        // 3. Logika Isi (PG atau Essay)
         if (!isEssay) {
-            // LOGIKA PILIHAN GANDA
             pgTotal++;
             const kunci = (s.kunci || "a").toLowerCase();
             const jawab = (jawabanSiswa['pg_'+nomor] || "").toLowerCase();
             
             if (jawab === kunci) pgBenar++;
 
-            html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
+            html += "<div style='margin-top:10px;'>"; // Pembungkus opsional
             s.opsi.forEach((o, x) => {
                 let txt = typeof o === 'object' ? (o.t||o.text) : o;
-                let classes = [];
+                // Perbaikan: Logika class yang lebih aman
+                let classes = ["opsi-item"];
                 if (String.fromCharCode(97+x) === kunci) classes.push("opsi-benar");
                 if (String.fromCharCode(97+x) === jawab) classes.push("opsi-dipilih");
                 if (String.fromCharCode(97+x) === jawab && jawab !== kunci) classes.push("opsi-salah");
                 
-                html += `<div class="opsi-item ${classes.join(' ')}">${String.fromCharCode(65+x)}. ${txt}</div>`;
+                html += `<div class="${classes.join(' ')}">${String.fromCharCode(65+x)}. ${txt}</div>`;
             });
             html += "</div>";
             html += `<div class="kunci">Kunci: ${kunci.toUpperCase()} | Jawaban Siswa: ${jawab.toUpperCase() || '-'}</div>`;
         
         } else {
-            // LOGIKA ESSAY
             const jawabText = jawabanSiswa['essay_'+nomor] || jawabanSiswa['uraian_'+nomor] || "<i>Tidak dijawab</i>";
             html += `<div class="jawaban-box">
                 <div class="jawaban-label">Jawaban Siswa:</div>
@@ -2245,9 +2250,9 @@
                 <input type="number" min="0" max="100" class="input-nilai-essay" data-nomor="${nomor}" value="${jawabanSiswa['nilai_'+nomor] || 0}" onchange="hitungNilaiOtomatis()">
             </div>`;
         }
-        // ========== AKHIR PERBAIKAN ==========
         
-        html += `</div>`; // Penutup soal-box
+        // 4. Tutup Kotak Soal (SATU KALI di akhir)
+        html += `</div>`;
     });
 
     const nilaiPG = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
