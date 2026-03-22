@@ -727,7 +727,7 @@
         .modal-box {
             background: var(--card);
             width: 100%;
-            max-width: 650px;
+            max-width: 750px; /* Lebar diperbesar untuk soal */
             border-radius: 20px;
             max-height: 90vh;
             overflow: hidden;
@@ -758,6 +758,10 @@
 
         .modal-header.success {
             background: linear-gradient(135deg, var(--accent-green), #16A34A);
+        }
+
+        .modal-header.purple {
+            background: linear-gradient(135deg, var(--accent-purple), #9333EA);
         }
 
         .close-btn {
@@ -1054,47 +1058,6 @@
             display: block;
         }
 
-        /* Chart bar */
-        .chart-bar {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .chart-label {
-            width: 80px;
-            font-size: 0.8rem;
-            color: var(--muted);
-            flex-shrink: 0;
-        }
-
-        .chart-fill-bg {
-            flex-grow: 1;
-            height: 20px;
-            background: #E2E8F0;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .chart-fill {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 8px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: white;
-        }
-
-        .chart-fill.blue { background: linear-gradient(90deg, var(--accent-blue), #3B82F6); }
-        .chart-fill.green { background: linear-gradient(90deg, var(--accent-green), #10B981); }
-        .chart-fill.orange { background: linear-gradient(90deg, var(--accent-orange), #F59E0B); }
-        .chart-fill.red { background: linear-gradient(90deg, var(--accent-red), #EF4444); }
-
         /* ========== LEMBAR JAWABAN A4 - OPTIMIZED ========== */
         .lembar-jawaban-preview {
             background: white;
@@ -1277,6 +1240,7 @@
             .card { padding: 18px; }
             .token-grid { grid-template-columns: repeat(2, 1fr); }
             .nilai-manual-grid { grid-template-columns: 1fr; }
+            .modal-box { max-width: 100%; }
         }
 
         /* Reduced motion */
@@ -1487,7 +1451,7 @@
 
                     <div class="alert alert-info no-print" style="margin-bottom:20px;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                        <span>Untuk Kelas 1-3, input nilai secara manual. Untuk Kelas 4-6, koreksi jawaban essay dari hasil ujian siswa.</span>
+                        <span><b>Kelas 1-3:</b> Input nilai manual. <b>Kelas 4-6:</b> Koreksi soal essay di sistem.</span>
                     </div>
 
                     <div class="table-container">
@@ -1703,11 +1667,11 @@
                             <select id="soal-mapel-select" onchange="loadBankSoal()">
                                 <option value="ppkn">PPKN</option>
                                 <option value="mtk">Matematika</option>
-                                <option value="bind">B. Indonesia</option>
+                                <option value="bind">Bahasa Indonesia</option>
                                 <option value="sbk">Seni Budaya</option>
                                 <option value="ipas">IPAS</option>
-                                <option value="bsd">B. Sunda</option>
-                                <option value="bing">B. Inggris</option>
+                                <option value="bsd">Bahasa Sunda</option>
+                                <option value="bing">Bahasa Inggris</option>
                                 <option value="pai">PAI</option>
                                 <option value="pjok">PJOK</option>
                             </select>
@@ -1765,10 +1729,10 @@
     <!-- Modal Koreksi Detail -->
     <div id="modal-koreksi-detail" class="modal-layer hidden">
         <div class="modal-box">
-            <div class="modal-header">
+            <div class="modal-header" id="modal-header-koreksi">
                 <h3>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    Input Nilai
+                    <span id="modal-title-text">Koreksi Jawaban</span>
                 </h3>
                 <button class="close-btn" onclick="closeModalKoreksi()">&times;</button>
             </div>
@@ -1788,8 +1752,8 @@
                     </div>
                 </div>
 
-                <!-- Input Nilai Manual -->
-                <div id="nilai-manual-container">
+                <!-- Input Nilai Manual (Kelas 1-3) -->
+                <div id="nilai-manual-container" class="hidden">
                     <div class="nilai-manual-box">
                         <h4>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1812,6 +1776,7 @@
                     </div>
                 </div>
 
+                <!-- Detail Jawaban (Kelas 4-6) -->
                 <div id="detail-jawaban-list"></div>
             </div>
             <div class="modal-footer no-print">
@@ -1862,6 +1827,7 @@
         let deleteCallback = null;
         let currentSoalForLJ = [];
         let sekolahNamaCache = '';
+        let currentSoalData = []; // Menyimpan soal untuk koreksi kelas 4-6
 
         const mapelNames = {
             'ppkn': 'Pendidikan Pancasila',
@@ -2138,7 +2104,7 @@
                         <td><b style="color:var(--accent-blue)">${item.nilai || 0}</b></td>
                         <td><span class="status ${statusClass}">${item.status || '-'}</span></td>
                         <td class="no-print">
-                            <button class="btn btn-sm btn-warning" onclick="bukaInputNilai('${uid}')" title="Input Nilai">
+                            <button class="btn btn-sm btn-warning" onclick="bukaInputNilai('${uid}')" title="Input/Koreksi Nilai">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="hapusDataSiswa('${uid}')" title="Hapus">
@@ -2162,7 +2128,7 @@
             });
         }
 
-        // ========== INPUT NILAI MANUAL ==========
+        // ========== LOGika MODAL KOREKSI (KELAS 1-3 VS 4-6) ==========
         function bukaInputNilai(uid) {
             const data = cachePengerjaan[uid];
             if(!data) return alert("Data tidak ditemukan!");
@@ -2173,12 +2139,161 @@
             document.getElementById('detail-kelas').innerText = data.kelas || '-';
             document.getElementById('detail-mapel').innerText = data.mapelNama || mapelNames[data.mapel] || data.mapel || '-';
             
-            document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
-            document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
-            hitungNilaiManual();
-            
+            // Reset tampilan
             document.getElementById('detail-jawaban-list').innerHTML = '';
+            document.getElementById('nilai-manual-container').classList.add('hidden');
+            
+            // Cek apakah kelas 4, 5, atau 6
+            const kelasNum = (data.kelas || "").match(/\d/);
+            const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+
+            if (isKelasTinggi) {
+                // === MODE KELAS 4-6: TAMPILKAN SOAL & JAWABAN ===
+                document.getElementById('modal-title-text').innerText = "Koreksi Jawaban Essay";
+                document.getElementById('modal-header-koreksi').classList.remove('purple'); // pastikan warna default
+                
+                // Ambil soal dari bank soal
+                const mapel = data.mapel;
+                const kelasKey = data.kelasKey || (data.kelas ? data.kelas.substring(0, data.kelas.length-1).toLowerCase().replace(' ', '_') : 'kelas_1');
+                
+                db.ref(`admin_pusat/gudang_soal/${mapel}/${kelasKey}`).once('value', snap => {
+                    const soalData = snap.val();
+                    if(soalData) {
+                        currentSoalData = soalData;
+                        renderKoreksiKelasTinggi(data, soalData);
+                    } else {
+                        // Fallback jika soal tidak ditemukan
+                        document.getElementById('nilai-manual-container').classList.remove('hidden');
+                        document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
+                        document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
+                        hitungNilaiManual();
+                        alert("Data soal pusat tidak ditemukan, silakan input nilai manual.");
+                    }
+                });
+            } else {
+                // === MODE KELAS 1-3: INPUT MANUAL ===
+                document.getElementById('modal-title-text').innerText = "Input Nilai Manual";
+                document.getElementById('nilai-manual-container').classList.remove('hidden');
+                
+                document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
+                document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
+                hitungNilaiManual();
+            }
+
             document.getElementById('modal-koreksi-detail').classList.remove('hidden');
+        }
+
+        function renderKoreksiKelasTinggi(dataSiswa, soalData) {
+            const jawabanSiswa = dataSiswa.jawaban || {};
+            const listContainer = document.getElementById('detail-jawaban-list');
+            
+            // Hitung PG otomatis
+            let pgBenar = 0;
+            let pgTotal = 0;
+            
+            let html = "";
+            
+            soalData.forEach((s, i) => {
+                const isEssay = !s.opsi || s.opsi.length === 0;
+                const nomor = i + 1;
+                
+                html += `<div class="soal-box">
+                    <div class="soal-nomor">
+                        <span>No. ${nomor}</span>
+                        <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
+                    </div>
+                    <div class="soal-text">${s.tanya || s.pertanyaan || '-'}</div>`;
+                
+                if(s.img || s.i) {
+                    html += `<img src="${s.img || s.i}" style="max-width:100%; border-radius:8px; margin:8px 0;">`;
+                }
+
+                if (!isEssay) {
+                    // PILIHAN GANDA
+                    pgTotal++;
+                    const kunci = (s.kunci || "a").toLowerCase();
+                    const jawab = (jawabanSiswa['pg_'+nomor] || "").toLowerCase();
+                    
+                    if (jawab === kunci) pgBenar++;
+
+                    html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
+                    s.opsi.forEach((o, x) => {
+                        let txt = typeof o === 'object' ? (o.t||o.text) : o;
+                        let classes = [];
+                        if (String.fromCharCode(97+x) === kunci) classes.push("opsi-benar");
+                        if (String.fromCharCode(97+x) === jawab) classes.push("opsi-dipilih");
+                        if (String.fromCharCode(97+x) === jawab && jawab !== kunci) classes.push("opsi-salah");
+                        
+                        html += `<div class="opsi-item ${classes.join(' ')}">${String.fromCharCode(65+x)}. ${txt}</div>`;
+                    });
+                    html += "</div>";
+                    html += `<div class="kunci">Kunci: ${kunci.toUpperCase()} | Jawaban Siswa: ${jawab.toUpperCase() || '-'}</div>`;
+                
+                } else {
+                    // ESSAY / URAIAN
+                    const jawabText = jawabanSiswa['essay_'+nomor] || jawabanSiswa['uraian_'+nomor] || "<i>Tidak dijawab</i>";
+                    html += `<div class="jawaban-box">
+                        <div class="jawaban-label">Jawaban Siswa:</div>
+                        <div class="jawaban-text">${jawabText}</div>
+                    </div>`;
+                    
+                    // Input nilai untuk essay
+                    html += `<div class="koreksi-input">
+                        <label>Nilai Soal ${nomor} (0-100):</label>
+                        <input type="number" min="0" max="100" class="input-nilai-essay" data-nomor="${nomor}" value="${jawabanSiswa['nilai_'+nomor] || 0}" onchange="hitungNilaiOtomatis()">
+                    </div>`;
+                }
+                
+                html += `</div>`;
+            });
+
+            // Hitung nilai PG
+            const nilaiPG = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
+            
+            // Tampilkan ringkasan
+            html += `<div class="nilai-summary">
+                <div class="nilai-row">
+                    <span>Pilihan Ganda (${pgBenar}/${pgTotal} Benar)</span>
+                    <b id="nilai-pg-display">${nilaiPG}</b>
+                </div>
+                <div class="nilai-row">
+                    <span>Rata-rata Nilai Essay</span>
+                    <b id="nilai-essay-display">0</b>
+                </div>
+                <div class="nilai-row total">
+                    <span><b>NILAI AKHIR</b></span>
+                    <b id="nilai-akhir-display" style="font-size:1.8rem;">0</b>
+                </div>
+            </div>`;
+
+            listContainer.innerHTML = html;
+            
+            // Simpan nilai PG ke hidden input untuk perhitungan
+            listContainer.innerHTML += `<input type="hidden" id="calculated-nilai-pg" value="${nilaiPG}">`;
+            
+            hitungNilaiOtomatis();
+        }
+
+        function hitungNilaiOtomatis() {
+            const inputs = document.querySelectorAll('.input-nilai-essay');
+            let totalNilaiEssay = 0;
+            let countEssay = 0;
+
+            inputs.forEach(input => {
+                totalNilaiEssay += parseInt(input.value) || 0;
+                countEssay++;
+            });
+
+            const rataEssay = countEssay > 0 ? Math.round(totalNilaiEssay / countEssay) : 0;
+            const nilaiPG = parseInt(document.getElementById('calculated-nilai-pg').value) || 0;
+            
+            const nilaiAkhir = Math.round((nilaiPG + rataEssay) / 2);
+
+            const displayEssay = document.getElementById('nilai-essay-display');
+            const displayAkhir = document.getElementById('nilai-akhir-display');
+            
+            if (displayEssay) displayEssay.innerText = rataEssay;
+            if (displayAkhir) displayAkhir.innerText = nilaiAkhir;
         }
 
         function hitungNilaiManual() {
@@ -2191,9 +2306,43 @@
         function simpanNilai() {
             if(!currentEditUID) return;
             
-            const pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
-            const essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
-            const akhir = Math.round((pg + essay) / 2);
+            let pg = 0;
+            let essay = 0;
+            let akhir = 0;
+
+            // Cek mode kelas tinggi atau manual
+            const calculatedPG = document.getElementById('calculated-nilai-pg');
+            
+            if (calculatedPG) {
+                // Mode Kelas Tinggi (Ambil dari hasil kalkulasi tampilan)
+                pg = parseInt(calculatedPG.value) || 0;
+                
+                const inputs = document.querySelectorAll('.input-nilai-essay');
+                let totalEssay = 0;
+                let countEssay = 0;
+                inputs.forEach(input => {
+                    totalEssay += parseInt(input.value) || 0;
+                    countEssay++;
+                });
+                essay = countEssay > 0 ? Math.round(totalEssay / countEssay) : 0;
+                akhir = Math.round((pg + essay) / 2);
+
+                // Simpan juga nilai per soal
+                const jawabanUpdate = {};
+                inputs.forEach(input => {
+                    const nomor = input.dataset.nomor;
+                    jawabanUpdate['nilai_'+nomor] = parseInt(input.value) || 0;
+                });
+                
+                // Update ke database
+                 db.ref(`sekolah/${myNPSN}/pengerjaan/${currentEditUID}/jawaban`).update(jawabanUpdate);
+
+            } else {
+                // Mode Manual (Kelas 1-3)
+                pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
+                essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
+                akhir = Math.round((pg + essay) / 2);
+            }
 
             const updates = {
                 nilai_pg: pg,
@@ -2214,6 +2363,7 @@
         function closeModalKoreksi() {
             document.getElementById('modal-koreksi-detail').classList.add('hidden');
             currentEditUID = null;
+            currentSoalData = [];
         }
 
         // ========== LEMBAR JAWABAN ==========
