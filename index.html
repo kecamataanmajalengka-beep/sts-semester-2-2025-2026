@@ -1805,7 +1805,7 @@
         </div>
     </div>
 
-    <script>
+<script>
     const firebaseConfig = {
         apiKey: "AIzaSyCLR3DU5dy-2whKSFhUU67IQpEzbUL8-0s",
         authDomain: "soal-ulangan-97778.firebaseapp.com",
@@ -2064,7 +2064,7 @@
         return kelasItem.includes(myClassNum);
     }
 
-    // ========== LOAD KOREKSI - DENGAN PERHITUNGAN PG OTOMATIS ==========
+    // ========== LOAD KOREKSI - KEMBALI KE SIMPLE ==========
     function loadKoreksiData() {
         const filterKelas = document.getElementById('filter-koreksi-kelas').value;
         const filterStatus = document.getElementById('filter-koreksi-status').value;
@@ -2072,23 +2072,11 @@
 
         db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
             const data = snap.val() || {};
-            cachePengerjaan = data; // Update cache
-            
-            // Kumpulkan mapel yang unik untuk filter (jika perlu)
-            
+            cachePengerjaan = data; 
             let h = "";
             let no = 1;
 
-            // Kita perlu proses satu per satu untuk mengecek/menghitung PG
-            const keys = Object.keys(data);
-            let processedCount = 0;
-
-            if (keys.length === 0) {
-                document.getElementById('koreksi-list').innerHTML = "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data.</td></tr>";
-                return;
-            }
-
-            keys.forEach(uid => {
+            Object.keys(data).forEach(uid => {
                 const item = data[uid];
 
                 if(!canAccessData(item)) return;
@@ -2105,53 +2093,17 @@
                 const kelasNum = (item.kelas || "").match(/\d/);
                 const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
 
+                // Logika tampil:
+                // Kelas 4-6: Tampil jika ada jawaban ATAU sudah selesai
                 if (isKelasTinggi) {
                     if (!item.jawaban && !item.selesai) return; 
                 }
+                // Kelas 1-3: Selalu tampil (karena dibuat manual)
 
-                // === LOGIKA TAMBAHAN: Hitung Ulang PG Jika Ada Jawaban ===
-                // Ini memastikan nilai PG di tabel selah benar meski sebelumnya belum tersimpan
-                if (isKelasTinggi && item.jawaban && item.mapel && item.kelasKey) {
-                    // Jika nilai_pg belum ada atau 0, coba hitung ulang dari jawaban
-                    // Atau kita bisa selalu hitung ulang untuk memastikan konsistensi
-                    db.ref(`admin_pusat/gudang_soal/${item.mapel}/${item.kelasKey}`).once('value', sSnap => {
-                        const soalData = sSnap.val();
-                        if (soalData) {
-                            let pgBenar = 0;
-                            let pgTotal = 0;
-                            soalData.forEach((s, i) => {
-                                if (s.opsi && s.opsi.length > 0) {
-                                    pgTotal++;
-                                    const kunci = (s.kunci || "a").toLowerCase();
-                                    const jawab = (item.jawaban['pg_' + (i+1)] || "").toLowerCase();
-                                    if (jawab === kunci) pgBenar++;
-                                }
-                            });
-                            
-                            const nilaiPGCalc = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
-                            
-                            // Update item lokal untuk ditampilkan
-                            item.nilai_pg = nilaiPGCalc;
-                            
-                            // Update database jika berbeda (menyimpan permanen)
-                            if (item.nilai_pg !== nilaiPGCalc) {
-                                db.ref(`sekolah/${myNPSN}/pengerjaan/${uid}`).update({ nilai_pg: nilaiPGCalc });
-                            }
-                        }
-                        renderRow(uid, item, no++, isKelasTinggi);
-                        checkFinished();
-                    });
-                } else {
-                    // Langsung render untuk kelas 1-3 atau data tanpa soal
-                    renderRow(uid, item, no++, isKelasTinggi);
-                    checkFinished();
-                }
-            });
-
-            function renderRow(uid, item, idx, isTinggi) {
                 const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
+
                 h += `<tr>
-                    <td>${idx}</td>
+                    <td>${no++}</td>
                     <td><b>${item.nama}</b></td>
                     <td>${item.kelas || '-'}</td>
                     <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
@@ -2168,31 +2120,9 @@
                         </button>
                     </td>
                 </tr>`;
-            }
-
-            let expectedCount = 0;
-            Object.keys(data).forEach(uid => {
-                 const item = data[uid];
-                 if(!canAccessData(item)) return;
-                 if(filterKelas !== 'semua') { const kelasNum = filterKelas.replace('kelas_', ''); if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return; }
-                 if(filterStatus !== 'semua' && item.status !== filterStatus) return;
-                 if(filterMapel !== 'semua' && item.mapel !== filterMapel) return;
-                 const kelasNum = (item.kelas || "").match(/\d/);
-                 const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
-                 if (isKelasTinggi && !item.jawaban && !item.selesai) return;
-                 expectedCount++;
             });
 
-            function checkFinished() {
-                processedCount++;
-                if (processedCount >= expectedCount) {
-                    document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Untuk Kelas 4-6, data muncul setelah siswa ujian.</td></tr>";
-                }
-            }
-            
-            if (expectedCount === 0) {
-                 document.getElementById('koreksi-list').innerHTML = "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data.</td></tr>";
-            }
+            document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Untuk Kelas 4-6, data muncul setelah siswa ujian.</td></tr>";
         });
     }
 
@@ -2368,7 +2298,7 @@
         document.getElementById('manual-nilai-akhir').innerText = akhir;
     }
 
-    // ========== FUNGSI SIMPAN NILAI FINAL ==========
+    // ========== SIMPAN NILAI FINAL ==========
     function simpanNilai() {
         if(!currentEditUID) return;
         
@@ -2404,7 +2334,7 @@
             const nilaiAkhir = Math.round((nilaiPG + nilaiEssay) / 2);
 
             updates = {
-                nilai_pg: nilaiPG,
+                nilai_pg: nilaiPG, // SIMPAN NILAI PG
                 nilai_essay: nilaiEssay,
                 nilai: nilaiAkhir,
                 status: 'Selesai',
