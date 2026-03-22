@@ -1806,1094 +1806,1097 @@
     </div>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCLR3DU5dy-2whKSFhUU67IQpEzbUL8-0s",
-            authDomain: "soal-ulangan-97778.firebaseapp.com",
-            databaseURL: "https://soal-ulangan-97778-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "soal-ulangan-97778",
-            storageBucket: "soal-ulangan-97778.firebasestorage.app",
-            messagingSenderId: "186887090103",
-            appId: "1:186887090103:web:467a4be2ab2e32942c4232"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+    const firebaseConfig = {
+        apiKey: "AIzaSyCLR3DU5dy-2whKSFhUU67IQpEzbUL8-0s",
+        authDomain: "soal-ulangan-97778.firebaseapp.com",
+        databaseURL: "https://soal-ulangan-97778-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "soal-ulangan-97778",
+        storageBucket: "soal-ulangan-97778.firebasestorage.app",
+        messagingSenderId: "186887090103",
+        appId: "1:186887090103:web:467a4be2ab2e32942c4232"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-        let myNPSN = null;
-        let myRole = null;
-        let isLockedClass = false;
-        let isGuruMapel = false;
-        let cachePengerjaan = {};
-        let currentEditUID = null;
-        let deleteCallback = null;
-        let currentSoalForLJ = [];
-        let sekolahNamaCache = '';
-        let currentSoalData = []; // Menyimpan soal untuk koreksi kelas 4-6
+    let myNPSN = null;
+    let myRole = null;
+    let isLockedClass = false;
+    let isGuruMapel = false;
+    let cachePengerjaan = {};
+    let currentEditUID = null;
+    let deleteCallback = null;
+    let currentSoalForLJ = [];
+    let sekolahNamaCache = '';
+    let currentSoalData = []; 
 
-        const mapelNames = {
-            'ppkn': 'Pendidikan Pancasila',
-            'mtk': 'Matematika',
-            'bind': 'Bahasa Indonesia',
-            'sbk': 'Seni Budaya',
-            'ipas': 'IPAS',
-            'bsd': 'Bahasa Sunda',
-            'pai': 'PAI',
-            'pjok': 'PJOK',
-            'bing': 'Bahasa Inggris'
-        };
+    const mapelNames = {
+        'ppkn': 'Pendidikan Pancasila',
+        'mtk': 'Matematika',
+        'bind': 'Bahasa Indonesia',
+        'sbk': 'Seni Budaya',
+        'ipas': 'IPAS',
+        'bsd': 'Bahasa Sunda',
+        'pai': 'PAI',
+        'pjok': 'PJOK',
+        'bing': 'Bahasa Inggris'
+    };
 
-        // Mapel yang dipegang Wali Kelas
-        const waliKelasMapel = ['ppkn', 'mtk', 'bind', 'sbk', 'ipas', 'bsd', 'bing'];
+    const waliKelasMapel = ['ppkn', 'mtk', 'bind', 'sbk', 'ipas', 'bsd', 'bing'];
 
-        // ========== LOGIN ==========
-        function toggleRegister() {
+    // ========== LOGIN ==========
+    function toggleRegister() {
+        document.getElementById('form-login').classList.add('hidden');
+        document.getElementById('form-pilih-guru').classList.add('hidden');
+        document.getElementById('form-register').classList.remove('hidden');
+    }
+
+    function backToLogin() {
+        document.getElementById('form-login').classList.remove('hidden');
+        document.getElementById('form-pilih-guru').classList.add('hidden');
+        document.getElementById('form-register').classList.add('hidden');
+    }
+
+    function cekLogin() {
+        const n = document.getElementById('npsn').value;
+        const p = document.getElementById('pass').value;
+        if(p !== "123") return showError("Password Salah!");
+        
+        db.ref(`daftar_sekolah/${n}`).once('value', snap => {
+            if(!snap.exists()) return showError("NPSN tidak terdaftar.");
+            const data = snap.val();
+            const info = data.info || { nama: "Sekolah" };
+            const guruList = data.guru || {};
+            const selectGuru = document.getElementById('guru-list-select');
+            selectGuru.innerHTML = "";
+            
+            if(Object.keys(guruList).length === 0) return showError("Belum ada guru terdaftar di NPSN ini.");
+            
+            const sortedGuru = Object.entries(guruList).sort((a, b) => {
+                if(a[0].includes('kelas') && !b[0].includes('kelas')) return -1;
+                if(!a[0].includes('kelas') && b[0].includes('kelas')) return 1;
+                return a[0].localeCompare(b[0]);
+            });
+            
+            sortedGuru.forEach(([key, g]) => {
+                const nama = typeof g === 'string' ? g : (g.nama || 'Unknown');
+                const roleText = key.replace(/_/g, ' ').toUpperCase();
+                selectGuru.innerHTML += `<option value="${key}">${nama} (${roleText})</option>`;
+            });
+            
+            myNPSN = n;
+            sekolahNamaCache = info.nama || 'Sekolah';
+            document.getElementById('confirm-nama-sekolah').innerText = info.nama;
             document.getElementById('form-login').classList.add('hidden');
-            document.getElementById('form-pilih-guru').classList.add('hidden');
-            document.getElementById('form-register').classList.remove('hidden');
-        }
+            document.getElementById('form-pilih-guru').classList.remove('hidden');
+        });
+    }
 
-        function backToLogin() {
-            document.getElementById('form-login').classList.remove('hidden');
-            document.getElementById('form-pilih-guru').classList.add('hidden');
-            document.getElementById('form-register').classList.add('hidden');
-        }
-
-        function cekLogin() {
-            const n = document.getElementById('npsn').value;
-            const p = document.getElementById('pass').value;
-            if(p !== "123") return showError("Password Salah!");
+    function finalLogin() {
+        const selectedGuruKey = document.getElementById('guru-list-select').value;
+        db.ref(`daftar_sekolah/${myNPSN}/guru/${selectedGuruKey}`).once('value', snap => {
+            if(!snap.exists()) return showError("Data guru error.");
             
-            db.ref(`daftar_sekolah/${n}`).once('value', snap => {
-                if(!snap.exists()) return showError("NPSN tidak terdaftar.");
-                const data = snap.val();
-                const info = data.info || { nama: "Sekolah" };
-                const guruList = data.guru || {};
-                const selectGuru = document.getElementById('guru-list-select');
-                selectGuru.innerHTML = "";
-                
-                if(Object.keys(guruList).length === 0) return showError("Belum ada guru terdaftar di NPSN ini.");
-                
-                const sortedGuru = Object.entries(guruList).sort((a, b) => {
-                    if(a[0].includes('kelas') && !b[0].includes('kelas')) return -1;
-                    if(!a[0].includes('kelas') && b[0].includes('kelas')) return 1;
-                    return a[0].localeCompare(b[0]);
-                });
-                
-                sortedGuru.forEach(([key, g]) => {
-                    const nama = typeof g === 'string' ? g : (g.nama || 'Unknown');
-                    const roleText = key.replace(/_/g, ' ').toUpperCase();
-                    selectGuru.innerHTML += `<option value="${key}">${nama} (${roleText})</option>`;
-                });
-                
-                myNPSN = n;
-                sekolahNamaCache = info.nama || 'Sekolah';
-                document.getElementById('confirm-nama-sekolah').innerText = info.nama;
-                document.getElementById('form-login').classList.add('hidden');
-                document.getElementById('form-pilih-guru').classList.remove('hidden');
-            });
-        }
-
-        function finalLogin() {
-            const selectedGuruKey = document.getElementById('guru-list-select').value;
-            db.ref(`daftar_sekolah/${myNPSN}/guru/${selectedGuruKey}`).once('value', snap => {
-                if(!snap.exists()) return showError("Data guru error.");
-                
-                const guruData = snap.val();
-                myRole = selectedGuruKey;
-                isGuruMapel = (myRole === 'guru_pjok' || myRole === 'guru_pai');
-                
-                if(!isGuruMapel) {
-                    isLockedClass = true;
-                    document.getElementById('lock-info').style.display = 'flex';
-                    document.getElementById('lock-badge').style.display = 'inline-block';
-                    document.getElementById('lock-kelas-text').innerText = myRole.replace(/_/g, ' ').toUpperCase();
-                } else {
-                    isLockedClass = false;
-                    document.getElementById('lock-info').style.display = 'none';
-                    document.getElementById('lock-badge').style.display = 'none';
-                }
-                
-                document.getElementById('nama-sekolah').innerText = sekolahNamaCache;
-                document.getElementById('mobile-title').innerText = sekolahNamaCache;
-                
-                const namaGuru = typeof guruData === 'string' ? guruData : (guruData.nama || 'Guru');
-                document.getElementById('info-role').innerText = namaGuru + " (" + myRole.replace(/_/g, ' ').toUpperCase() + ")";
-                
-                document.getElementById('login-layer').classList.add('hidden');
-                document.getElementById('app-layer').classList.remove('hidden');
-                
-                applyRoleRestrictions();
-                initDashboard();
-            });
-        }
-
-        function register() {
-            const n = document.getElementById('reg-npsn').value;
-            const ns = document.getElementById('reg-nama-sekolah').value;
-            const ng = document.getElementById('reg-nama-guru').value;
-            const r = document.getElementById('reg-role').value;
-            if(!n || !ng || !r) return alert("Isi data lengkap!");
+            const guruData = snap.val();
+            myRole = selectedGuruKey;
+            isGuruMapel = (myRole === 'guru_pjok' || myRole === 'guru_pai');
             
-            db.ref(`daftar_sekolah/${n}/info`).set({ nama: ns });
-            db.ref(`daftar_sekolah/${n}/guru/${r}`).set({ nama: ng }).then(() => {
-                alert("Berhasil Daftar!");
-                backToLogin();
-            });
-        }
-
-        function showError(m) {
-            const e = document.getElementById('err-msg');
-            e.innerText = m;
-            e.style.display = 'block';
-            setTimeout(() => e.style.display = 'none', 3000);
-        }
-
-        // ========== SIDEBAR TOGGLE ==========
-        function toggleSidebar() {
-            document.querySelector('.sidebar').classList.toggle('open');
-            document.querySelector('.sidebar-overlay').classList.toggle('open');
-        }
-
-        // ========== PANEL NAVIGATION ==========
-        function showPanel(id) {
-            document.querySelectorAll('[id^="panel-"]').forEach(e => e.classList.add('hidden'));
-            document.getElementById('panel-' + id).classList.remove('hidden');
-            document.querySelectorAll('.menu-item').forEach(e => e.classList.remove('active'));
-            event.target.closest('.menu-item').classList.add('active');
-            
-            if(window.innerWidth <= 768) toggleSidebar();
-
-            if(id === 'koreksi') loadKoreksiData();
-            if(id === 'lembar-jawaban') initLembarJawaban();
-            if(id === 'nilai') loadNilaiPanel();
-            if(id === 'siswa') loadSiswaForm();
-            if(id === 'soal') loadBankSoal();
-            if(id === 'kelola-guru') loadKelolaGuru();
-        }
-
-        function applyRoleRestrictions() {
-            const mapelSelect = document.getElementById('mapel-select');
-            const kelasSelect = document.getElementById('kelas-select');
-            const filterNilai = document.getElementById('filter-nilai-kelas');
-            const filterKoreksi = document.getElementById('filter-koreksi-kelas');
-            const filterKoreksiMapel = document.getElementById('filter-koreksi-mapel');
-            const soalSelect = document.getElementById('soal-mapel-select');
-            const soalKelasSelect = document.getElementById('soal-kelas-select');
-            const ljMapelSelect = document.getElementById('lj-mapel-select');
-
-            mapelSelect.innerHTML = "";
-            ljMapelSelect.innerHTML = "";
-            filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option>';
-
-            if (myRole === 'guru_pjok') {
-                mapelSelect.innerHTML = '<option value="pjok">PJOK</option>';
-                soalSelect.innerHTML = '<option value="pjok">PJOK</option>';
-                ljMapelSelect.innerHTML = '<option value="pjok">PJOK</option>';
-                filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option><option value="pjok">PJOK</option>';
-            } else if (myRole === 'guru_pai') {
-                mapelSelect.innerHTML = '<option value="pai">PAI</option>';
-                soalSelect.innerHTML = '<option value="pai">PAI</option>';
-                ljMapelSelect.innerHTML = '<option value="pai">PAI</option>';
-                filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option><option value="pai">PAI</option>';
+            if(!isGuruMapel) {
+                isLockedClass = true;
+                document.getElementById('lock-info').style.display = 'flex';
+                document.getElementById('lock-badge').style.display = 'inline-block';
+                document.getElementById('lock-kelas-text').innerText = myRole.replace(/_/g, ' ').toUpperCase();
             } else {
-                // Guru Kelas - termasuk Bahasa Inggris
-                const waliMapelOptions = waliKelasMapel.map(m => `<option value="${m}">${mapelNames[m]}</option>`).join('');
-                mapelSelect.innerHTML = waliMapelOptions;
-                soalSelect.innerHTML = waliMapelOptions;
-                ljMapelSelect.innerHTML = '<option value="">-- Pilih Mapel --</option>' + waliMapelOptions;
-                filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option>' + waliMapelOptions;
-                
-                kelasSelect.value = myRole;
-                kelasSelect.disabled = true;
-                filterKoreksi.disabled = true;
-
-                if(myRole.includes('kelas_1')) soalKelasSelect.value = 'kelas_1';
-                if(myRole.includes('kelas_2')) soalKelasSelect.value = 'kelas_2';
-                if(myRole.includes('kelas_3')) soalKelasSelect.value = 'kelas_3';
-                if(myRole.includes('kelas_4')) soalKelasSelect.value = 'kelas_4';
-                if(myRole.includes('kelas_5')) soalKelasSelect.value = 'kelas_5';
-                if(myRole.includes('kelas_6')) soalKelasSelect.value = 'kelas_6';
-                soalKelasSelect.disabled = true;
+                isLockedClass = false;
+                document.getElementById('lock-info').style.display = 'none';
+                document.getElementById('lock-badge').style.display = 'none';
             }
-
-            if (!isLockedClass) {
-                kelasSelect.disabled = false;
-                filterKoreksi.disabled = false;
-                soalKelasSelect.disabled = false;
-            }
-        }
-
-        function initDashboard() {
-            loadKoreksiData();
-            loadToken();
-            listenForPendingKoreksi();
-        }
-
-        // ========== KONFIRMASI HAPUS ==========
-        function showKonfirmasi(text, callback) {
-            document.getElementById('konfirmasi-text').innerText = text;
-            deleteCallback = callback;
-            document.getElementById('btn-konfirmasi-hapus').onclick = () => {
-                if(deleteCallback) deleteCallback();
-                document.getElementById('modal-konfirmasi').classList.add('hidden');
-            };
-            document.getElementById('modal-konfirmasi').classList.remove('hidden');
-        }
-
-        // ========== LISTEN PENDING ==========
-        function listenForPendingKoreksi() {
-            db.ref(`sekolah/${myNPSN}/pengerjaan`).on('value', snap => {
-                const data = snap.val() || {};
-                let count = 0;
-                Object.values(data).forEach(item => {
-                    if(item.status === 'Perlu Koreksi' && canAccessData(item)) count++;
-                });
-                const badge = document.getElementById('badge-koreksi');
-                if(count > 0) {
-                    badge.style.display = 'inline';
-                    badge.innerText = count;
-                } else {
-                    badge.style.display = 'none';
-                }
-            });
-        }
-
-        function canAccessData(item) {
-            const mapelItem = (item.mapel || "").toLowerCase();
-            if (myRole === 'guru_pjok') return mapelItem === 'pjok';
-            if (myRole === 'guru_pai') return mapelItem === 'pai';
-            const kelasItem = (item.kelas || "").toLowerCase();
-            const myClassNum = myRole.replace('kelas_', '').replace('_', '');
-            return kelasItem.includes(myClassNum);
-        }
-
-        // ========== LOAD KOREKSI ==========
-        function loadKoreksiData() {
-            const filterKelas = document.getElementById('filter-koreksi-kelas').value;
-            const filterStatus = document.getElementById('filter-koreksi-status').value;
-            const filterMapel = document.getElementById('filter-koreksi-mapel').value;
-
-            db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
-                const data = snap.val() || {};
-                cachePengerjaan = data;
-                let h = "";
-                let no = 1;
-
-                Object.keys(data).forEach(uid => {
-                    const item = data[uid];
-
-                    if(!canAccessData(item)) return;
-
-                    if(filterKelas !== 'semua') {
-                        const kelasNum = filterKelas.replace('kelas_', '');
-                        if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return;
-                    }
-
-                    if(filterStatus !== 'semua' && item.status !== filterStatus) return;
-                    
-                    if(filterMapel !== 'semua' && item.mapel !== filterMapel) return;
-
-                    const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
-
-                    h += `<tr>
-                        <td>${no++}</td>
-                        <td><b>${item.nama}</b></td>
-                        <td>${item.kelas || '-'}</td>
-                        <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
-                        <td>${item.nilai_pg !== undefined ? item.nilai_pg : '-'}</td>
-                        <td>${item.nilai_essay !== undefined ? item.nilai_essay : '-'}</td>
-                        <td><b style="color:var(--accent-blue)">${item.nilai || 0}</b></td>
-                        <td><span class="status ${statusClass}">${item.status || '-'}</span></td>
-                        <td class="no-print">
-                            <button class="btn btn-sm btn-warning" onclick="bukaInputNilai('${uid}')" title="Input/Koreksi Nilai">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="hapusDataSiswa('${uid}')" title="Hapus">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                            </button>
-                        </td>
-                    </tr>`;
-                });
-
-                document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Simpan siswa di menu Data Siswa terlebih dahulu.</td></tr>";
-            });
-        }
-
-        function hapusDataSiswa(uid) {
-            const data = cachePengerjaan[uid];
-            if(!data) return;
-            showKonfirmasi(`Yakin hapus data "${data.nama}"?`, () => {
-                db.ref(`sekolah/${myNPSN}/pengerjaan/${uid}`).remove()
-                    .then(() => { alert("Data berhasil dihapus!"); loadKoreksiData(); })
-                    .catch(e => alert("Gagal hapus: " + e.message));
-            });
-        }
-
-        // ========== LOGika MODAL KOREKSI (KELAS 1-3 VS 4-6) ==========
-        function bukaInputNilai(uid) {
-            const data = cachePengerjaan[uid];
-            if(!data) return alert("Data tidak ditemukan!");
-
-            currentEditUID = uid;
-
-            document.getElementById('detail-nama').innerText = data.nama;
-            document.getElementById('detail-kelas').innerText = data.kelas || '-';
-            document.getElementById('detail-mapel').innerText = data.mapelNama || mapelNames[data.mapel] || data.mapel || '-';
             
-            // Reset tampilan
-            document.getElementById('detail-jawaban-list').innerHTML = '';
-            document.getElementById('nilai-manual-container').classList.add('hidden');
+            document.getElementById('nama-sekolah').innerText = sekolahNamaCache;
+            document.getElementById('mobile-title').innerText = sekolahNamaCache;
             
-            // Cek apakah kelas 4, 5, atau 6
-            const kelasNum = (data.kelas || "").match(/\d/);
-            const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+            const namaGuru = typeof guruData === 'string' ? guruData : (guruData.nama || 'Guru');
+            document.getElementById('info-role').innerText = namaGuru + " (" + myRole.replace(/_/g, ' ').toUpperCase() + ")";
+            
+            document.getElementById('login-layer').classList.add('hidden');
+            document.getElementById('app-layer').classList.remove('hidden');
+            
+            applyRoleRestrictions();
+            initDashboard();
+        });
+    }
 
-            if (isKelasTinggi) {
-                // === MODE KELAS 4-6: TAMPILKAN SOAL & JAWABAN ===
-                document.getElementById('modal-title-text').innerText = "Koreksi Jawaban Essay";
-                document.getElementById('modal-header-koreksi').classList.remove('purple'); // pastikan warna default
-                
-                // Ambil soal dari bank soal
-                const mapel = data.mapel;
-                const kelasKey = data.kelasKey || (data.kelas ? data.kelas.substring(0, data.kelas.length-1).toLowerCase().replace(' ', '_') : 'kelas_1');
-                
-                db.ref(`admin_pusat/gudang_soal/${mapel}/${kelasKey}`).once('value', snap => {
-                    const soalData = snap.val();
-                    if(soalData) {
-                        currentSoalData = soalData;
-                        renderKoreksiKelasTinggi(data, soalData);
-                    } else {
-                        // Fallback jika soal tidak ditemukan
-                        document.getElementById('nilai-manual-container').classList.remove('hidden');
-                        document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
-                        document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
-                        hitungNilaiManual();
-                        alert("Data soal pusat tidak ditemukan, silakan input nilai manual.");
-                    }
-                });
+    function register() {
+        const n = document.getElementById('reg-npsn').value;
+        const ns = document.getElementById('reg-nama-sekolah').value;
+        const ng = document.getElementById('reg-nama-guru').value;
+        const r = document.getElementById('reg-role').value;
+        if(!n || !ng || !r) return alert("Isi data lengkap!");
+        
+        db.ref(`daftar_sekolah/${n}/info`).set({ nama: ns });
+        db.ref(`daftar_sekolah/${n}/guru/${r}`).set({ nama: ng }).then(() => {
+            alert("Berhasil Daftar!");
+            backToLogin();
+        });
+    }
+
+    function showError(m) {
+        const e = document.getElementById('err-msg');
+        e.innerText = m;
+        e.style.display = 'block';
+        setTimeout(() => e.style.display = 'none', 3000);
+    }
+
+    // ========== SIDEBAR TOGGLE ==========
+    function toggleSidebar() {
+        document.querySelector('.sidebar').classList.toggle('open');
+        document.querySelector('.sidebar-overlay').classList.toggle('open');
+    }
+
+    // ========== PANEL NAVIGATION ==========
+    function showPanel(id) {
+        document.querySelectorAll('[id^="panel-"]').forEach(e => e.classList.add('hidden'));
+        document.getElementById('panel-' + id).classList.remove('hidden');
+        document.querySelectorAll('.menu-item').forEach(e => e.classList.remove('active'));
+        event.target.closest('.menu-item').classList.add('active');
+        
+        if(window.innerWidth <= 768) toggleSidebar();
+
+        if(id === 'koreksi') loadKoreksiData();
+        if(id === 'lembar-jawaban') initLembarJawaban();
+        if(id === 'nilai') loadNilaiPanel();
+        if(id === 'siswa') loadSiswaForm();
+        if(id === 'soal') loadBankSoal();
+        if(id === 'kelola-guru') loadKelolaGuru();
+    }
+
+    function applyRoleRestrictions() {
+        const mapelSelect = document.getElementById('mapel-select');
+        const kelasSelect = document.getElementById('kelas-select');
+        const filterNilai = document.getElementById('filter-nilai-kelas');
+        const filterKoreksi = document.getElementById('filter-koreksi-kelas');
+        const filterKoreksiMapel = document.getElementById('filter-koreksi-mapel');
+        const soalSelect = document.getElementById('soal-mapel-select');
+        const soalKelasSelect = document.getElementById('soal-kelas-select');
+        const ljMapelSelect = document.getElementById('lj-mapel-select');
+
+        mapelSelect.innerHTML = "";
+        ljMapelSelect.innerHTML = "";
+        filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option>';
+
+        if (myRole === 'guru_pjok') {
+            mapelSelect.innerHTML = '<option value="pjok">PJOK</option>';
+            soalSelect.innerHTML = '<option value="pjok">PJOK</option>';
+            ljMapelSelect.innerHTML = '<option value="pjok">PJOK</option>';
+            filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option><option value="pjok">PJOK</option>';
+        } else if (myRole === 'guru_pai') {
+            mapelSelect.innerHTML = '<option value="pai">PAI</option>';
+            soalSelect.innerHTML = '<option value="pai">PAI</option>';
+            ljMapelSelect.innerHTML = '<option value="pai">PAI</option>';
+            filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option><option value="pai">PAI</option>';
+        } else {
+            const waliMapelOptions = waliKelasMapel.map(m => `<option value="${m}">${mapelNames[m]}</option>`).join('');
+            mapelSelect.innerHTML = waliMapelOptions;
+            soalSelect.innerHTML = waliMapelOptions;
+            ljMapelSelect.innerHTML = '<option value="">-- Pilih Mapel --</option>' + waliMapelOptions;
+            filterKoreksiMapel.innerHTML = '<option value="semua">Semua Mapel</option>' + waliMapelOptions;
+            
+            kelasSelect.value = myRole;
+            kelasSelect.disabled = true;
+            filterKoreksi.disabled = true;
+
+            if(myRole.includes('kelas_1')) soalKelasSelect.value = 'kelas_1';
+            if(myRole.includes('kelas_2')) soalKelasSelect.value = 'kelas_2';
+            if(myRole.includes('kelas_3')) soalKelasSelect.value = 'kelas_3';
+            if(myRole.includes('kelas_4')) soalKelasSelect.value = 'kelas_4';
+            if(myRole.includes('kelas_5')) soalKelasSelect.value = 'kelas_5';
+            if(myRole.includes('kelas_6')) soalKelasSelect.value = 'kelas_6';
+            soalKelasSelect.disabled = true;
+        }
+
+        if (!isLockedClass) {
+            kelasSelect.disabled = false;
+            filterKoreksi.disabled = false;
+            soalKelasSelect.disabled = false;
+        }
+    }
+
+    function initDashboard() {
+        loadKoreksiData();
+        loadToken();
+        listenForPendingKoreksi();
+    }
+
+    // ========== KONFIRMASI HAPUS ==========
+    function showKonfirmasi(text, callback) {
+        document.getElementById('konfirmasi-text').innerText = text;
+        deleteCallback = callback;
+        document.getElementById('btn-konfirmasi-hapus').onclick = () => {
+            if(deleteCallback) deleteCallback();
+            document.getElementById('modal-konfirmasi').classList.add('hidden');
+        };
+        document.getElementById('modal-konfirmasi').classList.remove('hidden');
+    }
+
+    // ========== LISTEN PENDING ==========
+    function listenForPendingKoreksi() {
+        db.ref(`sekolah/${myNPSN}/pengerjaan`).on('value', snap => {
+            const data = snap.val() || {};
+            let count = 0;
+            Object.values(data).forEach(item => {
+                if(item.status === 'Perlu Koreksi' && canAccessData(item)) count++;
+            });
+            const badge = document.getElementById('badge-koreksi');
+            if(count > 0) {
+                badge.style.display = 'inline';
+                badge.innerText = count;
             } else {
-                // === MODE KELAS 1-3: INPUT MANUAL ===
-                document.getElementById('modal-title-text').innerText = "Input Nilai Manual";
-                document.getElementById('nilai-manual-container').classList.remove('hidden');
-                
-                document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
-                document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
-                hitungNilaiManual();
+                badge.style.display = 'none';
             }
+        });
+    }
 
-            document.getElementById('modal-koreksi-detail').classList.remove('hidden');
-        }
+    function canAccessData(item) {
+        const mapelItem = (item.mapel || "").toLowerCase();
+        if (myRole === 'guru_pjok') return mapelItem === 'pjok';
+        if (myRole === 'guru_pai') return mapelItem === 'pai';
+        const kelasItem = (item.kelas || "").toLowerCase();
+        const myClassNum = myRole.replace('kelas_', '').replace('_', '');
+        return kelasItem.includes(myClassNum);
+    }
 
-        function renderKoreksiKelasTinggi(dataSiswa, soalData) {
-            const jawabanSiswa = dataSiswa.jawaban || {};
-            const listContainer = document.getElementById('detail-jawaban-list');
-            
-            // Hitung PG otomatis
-            let pgBenar = 0;
-            let pgTotal = 0;
-            
-            let html = "";
-            
-            soalData.forEach((s, i) => {
-                const isEssay = !s.opsi || s.opsi.length === 0;
-                const nomor = i + 1;
-                
-                html += `<div class="soal-box">
-                    <div class="soal-nomor">
-                        <span>No. ${nomor}</span>
-                        <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
-                    </div>
-                    <div class="soal-text">${s.tanya || s.pertanyaan || '-'}</div>`;
-                
-                if(s.img || s.i) {
-                    html += `<img src="${s.img || s.i}" style="max-width:100%; border-radius:8px; margin:8px 0;">`;
+    // ========== LOAD KOREKSI ==========
+    function loadKoreksiData() {
+        const filterKelas = document.getElementById('filter-koreksi-kelas').value;
+        const filterStatus = document.getElementById('filter-koreksi-status').value;
+        const filterMapel = document.getElementById('filter-koreksi-mapel').value;
+
+        db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
+            const data = snap.val() || {};
+            cachePengerjaan = data;
+            let h = "";
+            let no = 1;
+
+            Object.keys(data).forEach(uid => {
+                const item = data[uid];
+
+                if(!canAccessData(item)) return;
+
+                if(filterKelas !== 'semua') {
+                    const kelasNum = filterKelas.replace('kelas_', '');
+                    if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return;
                 }
 
-                if (!isEssay) {
-                    // PILIHAN GANDA
-                    pgTotal++;
-                    const kunci = (s.kunci || "a").toLowerCase();
-                    const jawab = (jawabanSiswa['pg_'+nomor] || "").toLowerCase();
-                    
-                    if (jawab === kunci) pgBenar++;
+                if(filterStatus !== 'semua' && item.status !== filterStatus) return;
+                
+                if(filterMapel !== 'semua' && item.mapel !== filterMapel) return;
 
-                    html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
-                    s.opsi.forEach((o, x) => {
-                        let txt = typeof o === 'object' ? (o.t||o.text) : o;
-                        let classes = [];
-                        if (String.fromCharCode(97+x) === kunci) classes.push("opsi-benar");
-                        if (String.fromCharCode(97+x) === jawab) classes.push("opsi-dipilih");
-                        if (String.fromCharCode(97+x) === jawab && jawab !== kunci) classes.push("opsi-salah");
-                        
-                        html += `<div class="opsi-item ${classes.join(' ')}">${String.fromCharCode(65+x)}. ${txt}</div>`;
-                    });
-                    html += "</div>";
-                    html += `<div class="kunci">Kunci: ${kunci.toUpperCase()} | Jawaban Siswa: ${jawab.toUpperCase() || '-'}</div>`;
-                
-                } else {
-                    // ESSAY / URAIAN
-                    const jawabText = jawabanSiswa['essay_'+nomor] || jawabanSiswa['uraian_'+nomor] || "<i>Tidak dijawab</i>";
-                    html += `<div class="jawaban-box">
-                        <div class="jawaban-label">Jawaban Siswa:</div>
-                        <div class="jawaban-text">${jawabText}</div>
-                    </div>`;
-                    
-                    // Input nilai untuk essay
-                    html += `<div class="koreksi-input">
-                        <label>Nilai Soal ${nomor} (0-100):</label>
-                        <input type="number" min="0" max="100" class="input-nilai-essay" data-nomor="${nomor}" value="${jawabanSiswa['nilai_'+nomor] || 0}" onchange="hitungNilaiOtomatis()">
-                    </div>`;
+                const kelasNum = (item.kelas || "").match(/\d/);
+                const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+
+                if (isKelasTinggi) {
+                    if (!item.jawaban && !item.selesai) return; 
                 }
-                
-                html += `</div>`;
+
+                const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
+
+                h += `<tr>
+                    <td>${no++}</td>
+                    <td><b>${item.nama}</b></td>
+                    <td>${item.kelas || '-'}</td>
+                    <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
+                    <td>${item.nilai_pg !== undefined ? item.nilai_pg : '-'}</td>
+                    <td>${item.nilai_essay !== undefined ? item.nilai_essay : '-'}</td>
+                    <td><b style="color:var(--accent-blue)">${item.nilai || 0}</b></td>
+                    <td><span class="status ${statusClass}">${item.status || '-'}</span></td>
+                    <td class="no-print">
+                        <button class="btn btn-sm btn-warning" onclick="bukaInputNilai('${uid}')" title="Input/Koreksi Nilai">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="hapusDataSiswa('${uid}')" title="Hapus">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        </button>
+                    </td>
+                </tr>`;
             });
 
-            // Hitung nilai PG
-            const nilaiPG = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
-            
-            // Tampilkan ringkasan
-            html += `<div class="nilai-summary">
-                <div class="nilai-row">
-                    <span>Pilihan Ganda (${pgBenar}/${pgTotal} Benar)</span>
-                    <b id="nilai-pg-display">${nilaiPG}</b>
-                </div>
-                <div class="nilai-row">
-                    <span>Rata-rata Nilai Essay</span>
-                    <b id="nilai-essay-display">0</b>
-                </div>
-                <div class="nilai-row total">
-                    <span><b>NILAI AKHIR</b></span>
-                    <b id="nilai-akhir-display" style="font-size:1.8rem;">0</b>
-                </div>
-            </div>`;
+            document.getElementById('koreksi-list').innerHTML = h || "<tr><td colspan='9' style='text-align:center; color:var(--muted);'>Tidak ada data. Untuk Kelas 4-6, data muncul setelah siswa ujian.</td></tr>";
+        });
+    }
 
-            listContainer.innerHTML = html;
+    function hapusDataSiswa(uid) {
+        const data = cachePengerjaan[uid];
+        if(!data) return;
+        showKonfirmasi(`Yakin hapus data "${data.nama}"?`, () => {
+            db.ref(`sekolah/${myNPSN}/pengerjaan/${uid}`).remove()
+                .then(() => { alert("Data berhasil dihapus!"); loadKoreksiData(); })
+                .catch(e => alert("Gagal hapus: " + e.message));
+        });
+    }
+
+    // ========== LOGIKA MODAL KOREKSI ==========
+    function bukaInputNilai(uid) {
+        const data = cachePengerjaan[uid];
+        if(!data) return alert("Data tidak ditemukan!");
+
+        currentEditUID = uid;
+
+        document.getElementById('detail-nama').innerText = data.nama;
+        document.getElementById('detail-kelas').innerText = data.kelas || '-';
+        document.getElementById('detail-mapel').innerText = data.mapelNama || mapelNames[data.mapel] || data.mapel || '-';
+        
+        document.getElementById('detail-jawaban-list').innerHTML = '';
+        document.getElementById('nilai-manual-container').classList.add('hidden');
+        
+        const kelasNum = (data.kelas || "").match(/\d/);
+        const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+
+        if (isKelasTinggi && data.jawaban) {
+            document.getElementById('modal-title-text').innerText = "Koreksi Jawaban Essay";
+            document.getElementById('modal-header-koreksi').classList.add('purple');
             
-            // Simpan nilai PG ke hidden input untuk perhitungan
-            listContainer.innerHTML += `<input type="hidden" id="calculated-nilai-pg" value="${nilaiPG}">`;
+            const mapel = data.mapel;
+            const kelasKey = data.kelasKey || (data.kelas ? data.kelas.substring(0, data.kelas.length-1).toLowerCase().replace(' ', '_') : 'kelas_1');
             
-            hitungNilaiOtomatis();
+            db.ref(`admin_pusat/gudang_soal/${mapel}/${kelasKey}`).once('value', snap => {
+                const soalData = snap.val();
+                if(soalData) {
+                    currentSoalData = soalData;
+                    renderKoreksiKelasTinggi(data, soalData);
+                } else {
+                    document.getElementById('nilai-manual-container').classList.remove('hidden');
+                    document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
+                    document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
+                    hitungNilaiManual();
+                    alert("Data soal pusat tidak ditemukan, silakan input nilai manual.");
+                }
+            });
+        } else {
+            document.getElementById('modal-title-text').innerText = "Input Nilai Manual";
+            document.getElementById('modal-header-koreksi').classList.remove('purple');
+            document.getElementById('nilai-manual-container').classList.remove('hidden');
+            
+            document.getElementById('manual-nilai-pg').value = data.nilai_pg || 0;
+            document.getElementById('manual-nilai-essay').value = data.nilai_essay || 0;
+            hitungNilaiManual();
         }
 
-        function hitungNilaiOtomatis() {
+        document.getElementById('modal-koreksi-detail').classList.remove('hidden');
+    }
+
+    function renderKoreksiKelasTinggi(dataSiswa, soalData) {
+        const jawabanSiswa = dataSiswa.jawaban || {};
+        const listContainer = document.getElementById('detail-jawaban-list');
+        
+        let pgBenar = 0;
+        let pgTotal = 0;
+        
+        let html = "";
+        
+        soalData.forEach((s, i) => {
+            const isEssay = !s.opsi || s.opsi.length === 0;
+            const nomor = i + 1;
+            
+            html += `<div class="soal-box">
+                <div class="soal-nomor">
+                    <span>No. ${nomor}</span>
+                    <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
+                </div>
+                <div class="soal-text">${s.tanya || s.pertanyaan || '-'}</div>`;
+            
+            if(s.img || s.i) {
+                html += `<img src="${s.img || s.i}" style="max-width:100%; border-radius:8px; margin:8px 0;">`;
+            }
+
+            if (!isEssay) {
+                pgTotal++;
+                const kunci = (s.kunci || "a").toLowerCase();
+                const jawab = (jawabanSiswa['pg_'+nomor] || "").toLowerCase();
+                
+                if (jawab === kunci) pgBenar++;
+
+                html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
+                s.opsi.forEach((o, x) => {
+                    let txt = typeof o === 'object' ? (o.t||o.text) : o;
+                    let classes = [];
+                    if (String.fromCharCode(97+x) === kunci) classes.push("opsi-benar");
+                    if (String.fromCharCode(97+x) === jawab) classes.push("opsi-dipilih");
+                    if (String.fromCharCode(97+x) === jawab && jawab !== kunci) classes.push("opsi-salah");
+                    
+                    html += `<div class="opsi-item ${classes.join(' ')}">${String.fromCharCode(65+x)}. ${txt}</div>`;
+                });
+                html += "</div>";
+                html += `<div class="kunci">Kunci: ${kunci.toUpperCase()} | Jawaban Siswa: ${jawab.toUpperCase() || '-'}</div>`;
+            
+            } else {
+                const jawabText = jawabanSiswa['essay_'+nomor] || jawabanSiswa['uraian_'+nomor] || "<i>Tidak dijawab</i>";
+                html += `<div class="jawaban-box">
+                    <div class="jawaban-label">Jawaban Siswa:</div>
+                    <div class="jawaban-text">${jawabText}</div>
+                </div>`;
+                
+                html += `<div class="koreksi-input">
+                    <label>Nilai Soal ${nomor} (0-100):</label>
+                    <input type="number" min="0" max="100" class="input-nilai-essay" data-nomor="${nomor}" value="${jawabanSiswa['nilai_'+nomor] || 0}" onchange="hitungNilaiOtomatis()">
+                </div>`;
+            }
+            
+            html += `</div>`;
+        });
+
+        const nilaiPG = pgTotal > 0 ? Math.round((pgBenar / pgTotal) * 100) : 0;
+        
+        html += `<div class="nilai-summary">
+            <div class="nilai-row">
+                <span>Pilihan Ganda (${pgBenar}/${pgTotal} Benar)</span>
+                <b id="nilai-pg-display">${nilaiPG}</b>
+            </div>
+            <div class="nilai-row">
+                <span>Rata-rata Nilai Essay</span>
+                <b id="nilai-essay-display">0</b>
+            </div>
+            <div class="nilai-row total">
+                <span><b>NILAI AKHIR</b></span>
+                <b id="nilai-akhir-display" style="font-size:1.8rem;">0</b>
+            </div>
+        </div>`;
+
+        listContainer.innerHTML = html;
+        listContainer.innerHTML += `<input type="hidden" id="calculated-nilai-pg" value="${nilaiPG}">`;
+        
+        hitungNilaiOtomatis();
+    }
+
+    function hitungNilaiOtomatis() {
+        const inputs = document.querySelectorAll('.input-nilai-essay');
+        let totalNilaiEssay = 0;
+        let countEssay = 0;
+
+        inputs.forEach(input => {
+            totalNilaiEssay += parseInt(input.value) || 0;
+            countEssay++;
+        });
+
+        const rataEssay = countEssay > 0 ? Math.round(totalNilaiEssay / countEssay) : 0;
+        const nilaiPG = parseInt(document.getElementById('calculated-nilai-pg').value) || 0;
+        
+        const nilaiAkhir = Math.round((nilaiPG + rataEssay) / 2);
+
+        const displayEssay = document.getElementById('nilai-essay-display');
+        const displayAkhir = document.getElementById('nilai-akhir-display');
+        
+        if (displayEssay) displayEssay.innerText = rataEssay;
+        if (displayAkhir) displayAkhir.innerText = nilaiAkhir;
+    }
+
+    function hitungNilaiManual() {
+        const pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
+        const essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
+        const akhir = Math.round((pg + essay) / 2);
+        document.getElementById('manual-nilai-akhir').innerText = akhir;
+    }
+
+    // ========== FUNGSI SIMPAN NILAI YANG SUDAH DIPERBAIKI ==========
+    function simpanNilai() {
+        if(!currentEditUID) return;
+        
+        // Ambil data lama dari cache untuk menjaga integritas data
+        const oldData = cachePengerjaan[currentEditUID];
+        if (!oldData) return alert("Data tidak ditemukan di memori.");
+
+        let updates = {}; // Object update utama
+
+        const calculatedPG = document.getElementById('calculated-nilai-pg');
+        
+        if (calculatedPG) {
+            // === MODE KELAS TINGGI ===
+            
+            // 1. Hitung nilai Essay
             const inputs = document.querySelectorAll('.input-nilai-essay');
-            let totalNilaiEssay = 0;
+            let totalEssay = 0;
             let countEssay = 0;
+            
+            // Siapkan object jawaban update dengan MENYALIN data lama (penting!)
+            let jawabanUpdate = { ...(oldData.jawaban || {}) };
 
             inputs.forEach(input => {
-                totalNilaiEssay += parseInt(input.value) || 0;
+                const nomor = input.dataset.nomor;
+                const nilaiInput = parseInt(input.value) || 0;
+                
+                totalEssay += nilaiInput;
                 countEssay++;
+                
+                // Update nilai essay di object jawaban
+                jawabanUpdate['nilai_'+nomor] = nilaiInput;
             });
 
-            const rataEssay = countEssay > 0 ? Math.round(totalNilaiEssay / countEssay) : 0;
-            const nilaiPG = parseInt(document.getElementById('calculated-nilai-pg').value) || 0;
-            
-            const nilaiAkhir = Math.round((nilaiPG + rataEssay) / 2);
+            const nilaiPG = parseInt(calculatedPG.value) || 0;
+            const nilaiEssay = countEssay > 0 ? Math.round(totalEssay / countEssay) : 0;
+            const nilaiAkhir = Math.round((nilaiPG + nilaiEssay) / 2);
 
-            const displayEssay = document.getElementById('nilai-essay-display');
-            const displayAkhir = document.getElementById('nilai-akhir-display');
-            
-            if (displayEssay) displayEssay.innerText = rataEssay;
-            if (displayAkhir) displayAkhir.innerText = nilaiAkhir;
-        }
+            // 2. Susun update utama
+            updates = {
+                nilai_pg: nilaiPG,
+                nilai_essay: nilaiEssay,
+                nilai: nilaiAkhir,
+                status: 'Selesai',
+                selesai: true,
+                // PENTING: Masukkan object jawaban yang sudah diupdate ke sini
+                jawaban: jawabanUpdate 
+            };
 
-        function hitungNilaiManual() {
+        } else {
+            // === MODE MANUAL (KELAS 1-3) ===
             const pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
             const essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
             const akhir = Math.round((pg + essay) / 2);
-            document.getElementById('manual-nilai-akhir').innerText = akhir;
-        }
-
-        function simpanNilai() {
-            if(!currentEditUID) return;
             
-            let pg = 0;
-            let essay = 0;
-            let akhir = 0;
-
-            // Cek mode kelas tinggi atau manual
-            const calculatedPG = document.getElementById('calculated-nilai-pg');
-            
-            if (calculatedPG) {
-                // Mode Kelas Tinggi (Ambil dari hasil kalkulasi tampilan)
-                pg = parseInt(calculatedPG.value) || 0;
-                
-                const inputs = document.querySelectorAll('.input-nilai-essay');
-                let totalEssay = 0;
-                let countEssay = 0;
-                inputs.forEach(input => {
-                    totalEssay += parseInt(input.value) || 0;
-                    countEssay++;
-                });
-                essay = countEssay > 0 ? Math.round(totalEssay / countEssay) : 0;
-                akhir = Math.round((pg + essay) / 2);
-
-                // Simpan juga nilai per soal
-                const jawabanUpdate = {};
-                inputs.forEach(input => {
-                    const nomor = input.dataset.nomor;
-                    jawabanUpdate['nilai_'+nomor] = parseInt(input.value) || 0;
-                });
-                
-                // Update ke database
-                 db.ref(`sekolah/${myNPSN}/pengerjaan/${currentEditUID}/jawaban`).update(jawabanUpdate);
-
-            } else {
-                // Mode Manual (Kelas 1-3)
-                pg = parseInt(document.getElementById('manual-nilai-pg').value) || 0;
-                essay = parseInt(document.getElementById('manual-nilai-essay').value) || 0;
-                akhir = Math.round((pg + essay) / 2);
-            }
-
-            const updates = {
+            updates = {
                 nilai_pg: pg,
                 nilai_essay: essay,
                 nilai: akhir,
                 status: 'Selesai'
             };
-
-            db.ref(`sekolah/${myNPSN}/pengerjaan/${currentEditUID}`).update(updates)
-                .then(() => { 
-                    alert("Nilai berhasil disimpan!"); 
-                    closeModalKoreksi(); 
-                    loadKoreksiData(); 
-                })
-                .catch(e => alert("Gagal menyimpan: " + e.message));
         }
 
-        function closeModalKoreksi() {
-            document.getElementById('modal-koreksi-detail').classList.add('hidden');
-            currentEditUID = null;
-            currentSoalData = [];
-        }
+        // 3. Eksekusi update ke Database
+        db.ref(`sekolah/${myNPSN}/pengerjaan/${currentEditUID}`).update(updates)
+            .then(() => { 
+                alert("Nilai berhasil disimpan!"); 
+                closeModalKoreksi(); 
+                loadKoreksiData(); 
+            })
+            .catch(e => alert("Gagal menyimpan: " + e.message));
+    }
 
-        // ========== LEMBAR JAWABAN ==========
-        function initLembarJawaban() {
-            // Set default tanggal ke hari ini
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('tanggal-ujian').value = today;
-            
-            if(isLockedClass && myRole.includes('kelas')) {
-                const kelasNum = myRole.match(/\d/);
-                if(kelasNum) {
-                    document.getElementById('lj-kelas-select').value = 'kelas_' + kelasNum[0];
-                }
+    function closeModalKoreksi() {
+        document.getElementById('modal-koreksi-detail').classList.add('hidden');
+        currentEditUID = null;
+        currentSoalData = [];
+    }
+
+    // ========== LEMBAR JAWABAN ==========
+    function initLembarJawaban() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('tanggal-ujian').value = today;
+        
+        if(isLockedClass && myRole.includes('kelas')) {
+            const kelasNum = myRole.match(/\d/);
+            if(kelasNum) {
+                document.getElementById('lj-kelas-select').value = 'kelas_' + kelasNum[0];
             }
         }
+    }
 
-        function loadSoalForLembarJawaban() {
-            const mapel = document.getElementById('lj-mapel-select').value;
-            const kelas = document.getElementById('lj-kelas-select').value;
+    function loadSoalForLembarJawaban() {
+        const mapel = document.getElementById('lj-mapel-select').value;
+        const kelas = document.getElementById('lj-kelas-select').value;
 
-            if(!mapel || !kelas) {
-                document.getElementById('lj-soal-info').style.display = 'none';
+        if(!mapel || !kelas) {
+            document.getElementById('lj-soal-info').style.display = 'none';
+            document.getElementById('lj-preview-container').style.display = 'none';
+            return;
+        }
+
+        db.ref(`admin_pusat/gudang_soal/${mapel}/${kelas}`).once('value', snap => {
+            const data = snap.val();
+            if(!data || data.length === 0) {
+                document.getElementById('lj-soal-info').style.display = 'block';
+                document.getElementById('lj-soal-info').innerHTML = `
+                    <div class="alert alert-warning">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <div><b>Belum ada soal</b><br>Admin pusat belum mengirim soal.</div>
+                    </div>`;
                 document.getElementById('lj-preview-container').style.display = 'none';
                 return;
             }
 
-            db.ref(`admin_pusat/gudang_soal/${mapel}/${kelas}`).once('value', snap => {
-                const data = snap.val();
-                if(!data || data.length === 0) {
-                    document.getElementById('lj-soal-info').style.display = 'block';
-                    document.getElementById('lj-soal-info').innerHTML = `
-                        <div class="alert alert-warning">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            <div><b>Belum ada soal</b><br>Admin pusat belum mengirim soal.</div>
-                        </div>`;
-                    document.getElementById('lj-preview-container').style.display = 'none';
-                    return;
-                }
-
-                currentSoalForLJ = data;
-                
-                const pgCount = data.filter(s => s.opsi && s.opsi.length > 0).length;
-                const essayCount = data.filter(s => !s.opsi || s.opsi.length === 0).length;
-                
-                document.getElementById('lj-soal-info').style.display = 'block';
-                document.getElementById('lj-soal-info').innerHTML = `
-                    <div class="alert alert-success">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        <div>
-                            <b>Soal ditemukan!</b><br>
-                            <span>Total: ${data.length} soal (PG: ${pgCount}, Uraian: ${essayCount})</span>
-                        </div>
-                    </div>`;
-
-                document.getElementById('lj-preview-container').style.display = 'block';
-                generateLembarJawaban(data, mapel, kelas);
-            });
-        }
-
-        function generateLembarJawaban(soal, mapel, kelas) {
-            const pgSoal = soal.filter(s => s.opsi && s.opsi.length > 0);
-            const essaySoal = soal.filter(s => !s.opsi || s.opsi.length === 0);
-            const mapelNama = mapelNames[mapel] || mapel;
-            const kelasNama = kelas.replace('kelas_', 'Kelas ').replace('_', ' ');
-
-            const isKelasRendah = kelas.includes('kelas_1') || kelas.includes('kelas_2');
-            const jumlahOpsi = isKelasRendah ? 3 : 4;
-
-            // Ambil tanggal dari input
-            const tanggalInput = document.getElementById('tanggal-ujian').value;
-            let tanggalDisplay = '';
-            if(tanggalInput) {
-                const date = new Date(tanggalInput);
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                tanggalDisplay = date.toLocaleDateString('id-ID', options);
-            }
-
-            let html = `
-                <div class="page-a4">
-                    <div class="lj-header">
-                        <h2>LEMBAR JAWABAN UJIAN</h2>
-                        <p><b>STS SEMESTER 2 - Kecamatan Majalengka</b></p>
-                    </div>`;
-
-            // TAMPILKAN TANGGAL DI ATAS JIKA ADA
-            if(tanggalDisplay) {
-                html += `<div class="lj-tanggal">Tanggal Ujian: <b>${tanggalDisplay}</b></div>`;
-            }
-
-            html += `
-                    <table class="lj-info-table">
-                        <tr><td>Sekolah</td><td class="filled">${sekolahNamaCache}</td></tr>
-                        <tr><td>Mata Pelajaran</td><td class="filled"><b>${mapelNama}</b></td></tr>
-                        <tr><td>Kelas</td><td class="filled"><b>${kelasNama}</b></td></tr>
-                        <tr><td>Nama Siswa</td><td>...........................</td></tr>
-                    </table>`;
-
-            // Bagian PG
-            if(pgSoal.length > 0) {
-                html += `<div class="lj-section-title">A. PILIHAN GANDA</div>`;
-                html += `<div class="lj-pg-grid">`;
-
-                pgSoal.forEach((s, i) => {
-                    const opsiLabels = [];
-                    for(let j = 0; j < jumlahOpsi; j++) {
-                        opsiLabels.push(String.fromCharCode(65 + j));
-                    }
-                    html += `
-                        <div class="lj-pg-item">
-                            <span class="nomor">${i + 1}.</span>
-                            <div style="display:flex; gap:2px;">
-                                ${opsiLabels.map(o => `<span class="opsi-circle">${o}</span>`).join('')}
-                            </div>
-                        </div>`;
-                });
-                html += `</div>`;
-            }
-
-            // Bagian Essay
-            if(essaySoal.length > 0) {
-                html += `<div class="lj-section-title">B. URAIAN SINGKAT</div>`;
-                html += `<div class="lj-essay-container">`;
-                
-                essaySoal.forEach((s, i) => {
-                    html += `
-                        <div class="lj-essay-box">
-                            <div class="nomor">${pgSoal.length + i + 1}.</div>
-                            <div class="lj-essay-lines"></div>
-                            <div class="lj-essay-lines"></div>
-                        </div>`;
-                });
-                html += `</div>`;
-            }
-
-            html += `</div>`;
-
-            document.getElementById('lembar-jawaban-preview').innerHTML = html;
-        }
-
-        function cetakLembarJawaban() {
-            const preview = document.getElementById('lembar-jawaban-preview').innerHTML;
-            const mapel = document.getElementById('lj-mapel-select').value;
-            const tanggalInput = document.getElementById('tanggal-ujian').value;
+            currentSoalForLJ = data;
             
-            let tanggalDisplay = '';
-            if(tanggalInput) {
-                const date = new Date(tanggalInput);
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                tanggalDisplay = date.toLocaleDateString('id-ID', options);
-            }
+            const pgCount = data.filter(s => s.opsi && s.opsi.length > 0).length;
+            const essayCount = data.filter(s => !s.opsi || s.opsi.length === 0).length;
             
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Lembar Jawaban - ${mapelNames[mapel] || ''}</title>
-                    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
-                    <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { font-family: 'Nunito', sans-serif; }
-                        @page { size: A4; margin: 10mm; }
-                        
-                        .page-a4 { width: 100%; }
-                        
-                        .lj-header {
-                            text-align: center;
-                            border: 2px solid #000;
-                            padding: 10px;
-                            margin-bottom: 10px;
-                        }
-                        .lj-header h2 { font-size: 14pt; margin: 0 0 3px 0; }
-                        .lj-header p { font-size: 10pt; margin: 2px 0; }
-                        
-                        .lj-tanggal {
-                            text-align: center;
-                            font-size: 10pt;
-                            margin-bottom: 8px;
-                            padding: 5px;
-                            background: #F3F4F6;
-                            border-radius: 4px;
-                        }
-                        .lj-tanggal b { color: #1E40AF; }
-                        
-                        .lj-info-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-bottom: 8px;
-                            font-size: 10pt;
-                        }
-                        .lj-info-table td {
-                            border: 1px solid #000;
-                            padding: 5px 8px;
-                        }
-                        .lj-info-table td:first-child {
-                            width: 100px;
-                            font-weight: 600;
-                        }
-                        .lj-info-table td.filled {
-                            background: #F0FDF4;
-                            font-weight: 600;
-                        }
-                        
-                        .lj-section-title {
-                            background: #E2E8F0;
-                            padding: 5px 8px;
-                            font-weight: 700;
-                            font-size: 10pt;
-                            margin: 8px 0 6px 0;
-                            border: 1px solid #000;
-                        }
-                        
-                        .lj-pg-grid {
-                            display: grid;
-                            grid-template-columns: repeat(5, 1fr);
-                            gap: 2px;
-                        }
-                        .lj-pg-item {
-                            display: flex;
-                            align-items: center;
-                            border: 1px solid #000;
-                            padding: 3px 5px;
-                            font-size: 9pt;
-                        }
-                        .lj-pg-item .nomor { width: 22px; font-weight: 600; }
-                        .lj-pg-item .opsi-circle {
-                            width: 14px;
-                            height: 14px;
-                            border: 1px solid #000;
-                            border-radius: 50%;
-                            margin: 0 2px;
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 6pt;
-                        }
-                        
-                        .lj-essay-container {
-                            display: grid;
-                            grid-template-columns: repeat(2, 1fr);
-                            gap: 5px;
-                        }
-                        .lj-essay-box {
-                            border: 1px solid #000;
-                            padding: 5px;
-                            font-size: 9pt;
-                        }
-                        .lj-essay-box .nomor { font-weight: 700; margin-bottom: 3px; }
-                        .lj-essay-lines {
-                            border-bottom: 1px dashed #999;
-                            height: 16px;
-                            margin-bottom: 2px;
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${preview}
-                    <script>setTimeout(() => { window.print(); }, 500);<\/script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-        }
-
-        // ========== KELOLA GURU ==========
-        function loadKelolaGuru() {
-            db.ref(`daftar_sekolah/${myNPSN}/guru`).once('value', snap => {
-                const data = snap.val() || {};
-                let h = "";
-                let no = 1;
-
-                Object.keys(data).forEach(key => {
-                    const g = data[key];
-                    const nama = typeof g === 'string' ? g : (g.nama || 'Unknown');
-                    const isCurrentGuru = (key === myRole);
-
-                    h += `<tr>
-                        <td>${no++}</td>
-                        <td>${nama} ${isCurrentGuru ? '<span style="color:var(--accent-blue)">(Anda)</span>' : ''}</td>
-                        <td>${key.replace(/_/g, ' ').toUpperCase()}</td>
-                        <td class="no-print">
-                            ${!isCurrentGuru ? `<button class="btn btn-sm btn-danger" onclick="hapusAkunGuru('${key}')">Hapus</button>` : '-'}
-                        </td>
-                    </tr>`;
-                });
-
-                document.getElementById('guru-table').innerHTML = h || "<tr><td colspan='4' style='text-align:center; color:var(--muted);'>Tidak ada data</td></tr>";
-            });
-        }
-
-        function hapusAkunGuru(roleKey) {
-            showKonfirmasi(`Yakin hapus akun "${roleKey.replace(/_/g, ' ').toUpperCase()}"?`, () => {
-                db.ref(`daftar_sekolah/${myNPSN}/guru/${roleKey}`).remove()
-                    .then(() => { alert("Akun berhasil dihapus!"); loadKelolaGuru(); })
-                    .catch(e => alert("Gagal hapus: " + e.message));
-            });
-        }
-
-        // ========== TOKEN ==========
-        function loadToken() {
-            const m = document.getElementById('mapel-select').value;
-            db.ref('admin_pusat/live_tokens').on('value', snap => {
-                const all = snap.val() || {};
-                const t = all[m] || {};
-                let h = "";
-                for(let i=1;i<=6;i++) {
-                    h += `<div class="token-card">
-                        <div class="token-label">Kelas ${i}</div>
-                        <div class="token-value">${t['kelas_'+i]||'-'}</div>
-                    </div>`;
-                }
-                document.getElementById('token-display').innerHTML = h;
-            });
-        }
-
-        // ========== NILAI PANEL ==========
-        function loadNilaiPanel() {
-            if(isGuruMapel) {
-                document.getElementById('filter-wali-kelas').classList.add('hidden');
-                document.getElementById('filter-guru-mapel').classList.remove('hidden');
-                loadNilaiGuruMapel();
-            } else {
-                document.getElementById('filter-wali-kelas').classList.remove('hidden');
-                document.getElementById('filter-guru-mapel').classList.add('hidden');
-                loadMapelCards();
-            }
-        }
-
-        function loadMapelCards() {
-            db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
-                const allData = snap.val() || {};
-                cachePengerjaan = allData;
-
-                const mapelData = {};
-                let totalSiswa = 0;
-                let sumNilai = 0;
-
-                Object.values(allData).forEach(item => {
-                    if(!canAccessData(item)) return;
-                    if(item.status !== 'Selesai') return;
-
-                    totalSiswa++;
-                    sumNilai += (item.nilai || 0);
-
-                    const mapel = item.mapel || 'unknown';
-                    const mapelNama = item.mapelNama || mapelNames[mapel] || mapel;
-
-                    if(!mapelData[mapel]) {
-                        mapelData[mapel] = { nama: mapelNama, siswa: [], total: 0, sum: 0 };
-                    }
-                    mapelData[mapel].siswa.push(item);
-                    mapelData[mapel].total++;
-                    mapelData[mapel].sum += (item.nilai || 0);
-                });
-
-                const statsHtml = `
-                    <div class="stat-card highlight">
-                        <div class="stat-num">${Object.keys(mapelData).length}</div>
-                        <div class="stat-label">Mapel Selesai</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-num" style="color:var(--accent-blue)">${totalSiswa}</div>
-                        <div class="stat-label">Total Data</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-num" style="color:var(--accent-green)">${totalSiswa > 0 ? Math.round(sumNilai / totalSiswa) : 0}</div>
-                        <div class="stat-label">Rata-rata Nilai</div>
-                    </div>
-                `;
-                document.getElementById('nilai-stats').innerHTML = statsHtml;
-
-                let cardsHtml = "";
-                Object.keys(mapelData).forEach(mapel => {
-                    const m = mapelData[mapel];
-                    const rata = m.total > 0 ? Math.round(m.sum / m.total) : 0;
-                    const colorClass = rata >= 75 ? 'green' : (rata >= 50 ? 'orange' : 'red');
-
-                    cardsHtml += `
-                    <div class="mapel-card">
-                        <div class="mapel-header" onclick="toggleMapelDetail('${mapel}')">
-                            <span class="mapel-name">${m.nama}</span>
-                            <div class="mapel-stats">
-                                <span><b>${m.total}</b> data</span>
-                                <span>Rata-rata: <b>${rata}</b></span>
-                            </div>
-                        </div>
-                        <div class="mapel-content" id="mapel-content-${mapel}">
-                            <div class="table-container">
-                                <table>
-                                    <thead>
-                                        <tr><th>No</th><th>Nama</th><th>PG</th><th>Essay</th><th>Nilai</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        ${m.siswa.map((s, idx) => `
-                                            <tr>
-                                                <td>${idx + 1}</td>
-                                                <td><b>${s.nama}</b></td>
-                                                <td>${s.nilai_pg || 0}</td>
-                                                <td>${s.nilai_essay || 0}</td>
-                                                <td><b>${s.nilai || 0}</b></td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>`;
-                });
-
-                document.getElementById('mapel-cards-container').innerHTML = cardsHtml || "<p style='text-align:center; color:var(--muted);'>Belum ada data nilai</p>";
-                document.getElementById('detail-nilai-container').innerHTML = "";
-            });
-        }
-
-        function toggleMapelDetail(mapel) {
-            const content = document.getElementById(`mapel-content-${mapel}`);
-            document.querySelectorAll('.mapel-content').forEach(el => el.classList.remove('show'));
-            document.querySelectorAll('.mapel-header').forEach(el => el.classList.remove('active'));
-            content.classList.toggle('show');
-            content.previousElementSibling.classList.toggle('active');
-        }
-
-        function loadNilaiGuruMapel() {
-            const filterKelas = document.getElementById('filter-nilai-kelas').value;
-
-            db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
-                const data = snap.val() || {};
-                let h = "";
-                let no = 1;
-                let totalSiswa = 0;
-                let sumNilai = 0;
-
-                Object.values(data).forEach(item => {
-                    if(!canAccessData(item)) return;
-                    if(item.status !== 'Selesai') return;
-
-                    if(filterKelas !== 'semua') {
-                        const kelasNum = filterKelas.replace('kelas_', '').replace('_', '');
-                        if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return;
-                    }
-
-                    totalSiswa++;
-                    sumNilai += (item.nilai || 0);
-
-                    h += `<tr>
-                        <td>${no++}</td>
-                        <td><b>${item.nama}</b></td>
-                        <td>${item.kelas || '-'}</td>
-                        <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
-                        <td>${item.nilai_pg || 0}</td>
-                        <td>${item.nilai_essay || 0}</td>
-                        <td><b>${item.nilai || 0}</b></td>
-                    </tr>`;
-                });
-
-                const statsHtml = `
-                    <div class="stat-card highlight">
-                        <div class="stat-num">${totalSiswa}</div>
-                        <div class="stat-label">Total Data</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-num" style="color:var(--accent-green)">${totalSiswa > 0 ? Math.round(sumNilai / totalSiswa) : 0}</div>
-                        <div class="stat-label">Rata-rata Nilai</div>
-                    </div>
-                `;
-                document.getElementById('nilai-stats').innerHTML = statsHtml;
-
-                const detailHtml = `
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Detail Nilai Siswa</div>
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr><th>No</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>PG</th><th>Essay</th><th>Nilai</th></tr>
-                            </thead>
-                            <tbody>${h || "<tr><td colspan='7' style='text-align:center; color:var(--muted);'>Tidak ada data</td></tr>"}</tbody>
-                        </table>
+            document.getElementById('lj-soal-info').style.display = 'block';
+            document.getElementById('lj-soal-info').innerHTML = `
+                <div class="alert alert-success">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <div>
+                        <b>Soal ditemukan!</b><br>
+                        <span>Total: ${data.length} soal (PG: ${pgCount}, Uraian: ${essayCount})</span>
                     </div>
                 </div>`;
 
-                document.getElementById('detail-nilai-container').innerHTML = detailHtml;
-            });
+            document.getElementById('lj-preview-container').style.display = 'block';
+            generateLembarJawaban(data, mapel, kelas);
+        });
+    }
+
+    function generateLembarJawaban(soal, mapel, kelas) {
+        const pgSoal = soal.filter(s => s.opsi && s.opsi.length > 0);
+        const essaySoal = soal.filter(s => !s.opsi || s.opsi.length === 0);
+        const mapelNama = mapelNames[mapel] || mapel;
+        const kelasNama = kelas.replace('kelas_', 'Kelas ').replace('_', ' ');
+
+        const isKelasRendah = kelas.includes('kelas_1') || kelas.includes('kelas_2');
+        const jumlahOpsi = isKelasRendah ? 3 : 4;
+
+        const tanggalInput = document.getElementById('tanggal-ujian').value;
+        let tanggalDisplay = '';
+        if(tanggalInput) {
+            const date = new Date(tanggalInput);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            tanggalDisplay = date.toLocaleDateString('id-ID', options);
         }
 
-        // ========== SISWA - DENGAN AUTO BUAT PENGERJAAN ==========
-        function loadSiswaForm() {
-            const k = isLockedClass ? myRole : document.getElementById('kelas-select').value;
-            if (!isLockedClass) document.getElementById('kelas-select').value = k;
-            db.ref(`sekolah/${myNPSN}/daftar_siswa/${k}`).once('value', snap => {
-                const d = snap.val() || [];
-                document.getElementById('siswa-text').value = d.join('\n');
-            });
+        let html = `
+            <div class="page-a4">
+                <div class="lj-header">
+                    <h2>LEMBAR JAWABAN UJIAN</h2>
+                    <p><b>STS SEMESTER 2 - Kecamatan Majalengka</b></p>
+                </div>`;
+
+        if(tanggalDisplay) {
+            html += `<div class="lj-tanggal">Tanggal Ujian: <b>${tanggalDisplay}</b></div>`;
         }
 
-        function saveSiswa() {
-            const k = isLockedClass ? myRole : document.getElementById('kelas-select').value;
-            const raw = document.getElementById('siswa-text').value;
-            const list = raw.split(/[\n,]+/).map(s => s.trim()).filter(s => s);
+        html += `
+                <table class="lj-info-table">
+                    <tr><td>Sekolah</td><td class="filled">${sekolahNamaCache}</td></tr>
+                    <tr><td>Mata Pelajaran</td><td class="filled"><b>${mapelNama}</b></td></tr>
+                    <tr><td>Kelas</td><td class="filled"><b>${kelasNama}</b></td></tr>
+                    <tr><td>Nama Siswa</td><td>...........................</td></tr>
+                </table>`;
+
+        if(pgSoal.length > 0) {
+            html += `<div class="lj-section-title">A. PILIHAN GANDA</div>`;
+            html += `<div class="lj-pg-grid">`;
+
+            pgSoal.forEach((s, i) => {
+                const opsiLabels = [];
+                for(let j = 0; j < jumlahOpsi; j++) {
+                    opsiLabels.push(String.fromCharCode(65 + j));
+                }
+                html += `
+                    <div class="lj-pg-item">
+                        <span class="nomor">${i + 1}.</span>
+                        <div style="display:flex; gap:2px;">
+                            ${opsiLabels.map(o => `<span class="opsi-circle">${o}</span>`).join('')}
+                        </div>
+                    </div>`;
+            });
+            html += `</div>`;
+        }
+
+        if(essaySoal.length > 0) {
+            html += `<div class="lj-section-title">B. URAIAN SINGKAT</div>`;
+            html += `<div class="lj-essay-container">`;
             
-            if(list.length === 0) {
-                alert("Masukkan minimal 1 nama siswa!");
-                return;
-            }
+            essaySoal.forEach((s, i) => {
+                html += `
+                    <div class="lj-essay-box">
+                        <div class="nomor">${pgSoal.length + i + 1}.</div>
+                        <div class="lj-essay-lines"></div>
+                        <div class="lj-essay-lines"></div>
+                    </div>`;
+            });
+            html += `</div>`;
+        }
 
-            // Simpan daftar siswa
-            db.ref(`sekolah/${myNPSN}/daftar_siswa/${k}`).set(list).then(() => {
-                // Buat entri pengerjaan untuk setiap siswa
-                const kelasNum = k.match(/\d/);
-                const isKelasRendah = kelasNum && parseInt(kelasNum[0]) <= 3;
-                
-                // Tentukan mapel yang akan dibuatkan entri
+        html += `</div>`;
+
+        document.getElementById('lembar-jawaban-preview').innerHTML = html;
+    }
+
+    function cetakLembarJawaban() {
+        const preview = document.getElementById('lembar-jawaban-preview').innerHTML;
+        const mapel = document.getElementById('lj-mapel-select').value;
+        const tanggalInput = document.getElementById('tanggal-ujian').value;
+        
+        let tanggalDisplay = '';
+        if(tanggalInput) {
+            const date = new Date(tanggalInput);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            tanggalDisplay = date.toLocaleDateString('id-ID', options);
+        }
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Lembar Jawaban - ${mapelNames[mapel] || ''}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Nunito', sans-serif; }
+                    @page { size: A4; margin: 10mm; }
+                    
+                    .page-a4 { width: 100%; }
+                    
+                    .lj-header {
+                        text-align: center;
+                        border: 2px solid #000;
+                        padding: 10px;
+                        margin-bottom: 10px;
+                    }
+                    .lj-header h2 { font-size: 14pt; margin: 0 0 3px 0; }
+                    .lj-header p { font-size: 10pt; margin: 2px 0; }
+                    
+                    .lj-tanggal {
+                        text-align: center;
+                        font-size: 10pt;
+                        margin-bottom: 8px;
+                        padding: 5px;
+                        background: #F3F4F6;
+                        border-radius: 4px;
+                    }
+                    .lj-tanggal b { color: #1E40AF; }
+                    
+                    .lj-info-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 8px;
+                        font-size: 10pt;
+                    }
+                    .lj-info-table td {
+                        border: 1px solid #000;
+                        padding: 5px 8px;
+                    }
+                    .lj-info-table td:first-child {
+                        width: 100px;
+                        font-weight: 600;
+                    }
+                    .lj-info-table td.filled {
+                        background: #F0FDF4;
+                        font-weight: 600;
+                    }
+                    
+                    .lj-section-title {
+                        background: #E2E8F0;
+                        padding: 5px 8px;
+                        font-weight: 700;
+                        font-size: 10pt;
+                        margin: 8px 0 6px 0;
+                        border: 1px solid #000;
+                    }
+                    
+                    .lj-pg-grid {
+                        display: grid;
+                        grid-template-columns: repeat(5, 1fr);
+                        gap: 2px;
+                    }
+                    .lj-pg-item {
+                        display: flex;
+                        align-items: center;
+                        border: 1px solid #000;
+                        padding: 3px 5px;
+                        font-size: 9pt;
+                    }
+                    .lj-pg-item .nomor { width: 22px; font-weight: 600; }
+                    .lj-pg-item .opsi-circle {
+                        width: 14px;
+                        height: 14px;
+                        border: 1px solid #000;
+                        border-radius: 50%;
+                        margin: 0 2px;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 6pt;
+                    }
+                    
+                    .lj-essay-container {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 5px;
+                    }
+                    .lj-essay-box {
+                        border: 1px solid #000;
+                        padding: 5px;
+                        font-size: 9pt;
+                    }
+                    .lj-essay-box .nomor { font-weight: 700; margin-bottom: 3px; }
+                    .lj-essay-lines {
+                        border-bottom: 1px dashed #999;
+                        height: 16px;
+                        margin-bottom: 2px;
+                    }
+                </style>
+            </head>
+            <body>
+                ${preview}
+                <script>setTimeout(() => { window.print(); }, 500);<\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
+    // ========== KELOLA GURU ==========
+    function loadKelolaGuru() {
+        db.ref(`daftar_sekolah/${myNPSN}/guru`).once('value', snap => {
+            const data = snap.val() || {};
+            let h = "";
+            let no = 1;
+
+            Object.keys(data).forEach(key => {
+                const g = data[key];
+                const nama = typeof g === 'string' ? g : (g.nama || 'Unknown');
+                const isCurrentGuru = (key === myRole);
+
+                h += `<tr>
+                    <td>${no++}</td>
+                    <td>${nama} ${isCurrentGuru ? '<span style="color:var(--accent-blue)">(Anda)</span>' : ''}</td>
+                    <td>${key.replace(/_/g, ' ').toUpperCase()}</td>
+                    <td class="no-print">
+                        ${!isCurrentGuru ? `<button class="btn btn-sm btn-danger" onclick="hapusAkunGuru('${key}')">Hapus</button>` : '-'}
+                    </td>
+                </tr>`;
+            });
+
+            document.getElementById('guru-table').innerHTML = h || "<tr><td colspan='4' style='text-align:center; color:var(--muted);'>Tidak ada data</td></tr>";
+        });
+    }
+
+    function hapusAkunGuru(roleKey) {
+        showKonfirmasi(`Yakin hapus akun "${roleKey.replace(/_/g, ' ').toUpperCase()}"?`, () => {
+            db.ref(`daftar_sekolah/${myNPSN}/guru/${roleKey}`).remove()
+                .then(() => { alert("Akun berhasil dihapus!"); loadKelolaGuru(); })
+                .catch(e => alert("Gagal hapus: " + e.message));
+        });
+    }
+
+    // ========== TOKEN ==========
+    function loadToken() {
+        const m = document.getElementById('mapel-select').value;
+        db.ref('admin_pusat/live_tokens').on('value', snap => {
+            const all = snap.val() || {};
+            const t = all[m] || {};
+            let h = "";
+            for(let i=1;i<=6;i++) {
+                h += `<div class="token-card">
+                    <div class="token-label">Kelas ${i}</div>
+                    <div class="token-value">${t['kelas_'+i]||'-'}</div>
+                </div>`;
+            }
+            document.getElementById('token-display').innerHTML = h;
+        });
+    }
+
+    // ========== NILAI PANEL ==========
+    function loadNilaiPanel() {
+        if(isGuruMapel) {
+            document.getElementById('filter-wali-kelas').classList.add('hidden');
+            document.getElementById('filter-guru-mapel').classList.remove('hidden');
+            loadNilaiGuruMapel();
+        } else {
+            document.getElementById('filter-wali-kelas').classList.remove('hidden');
+            document.getElementById('filter-guru-mapel').classList.add('hidden');
+            loadMapelCards();
+        }
+    }
+
+    function loadMapelCards() {
+        db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
+            const allData = snap.val() || {};
+            cachePengerjaan = allData;
+
+            const mapelData = {};
+            let totalSiswa = 0;
+            let sumNilai = 0;
+
+            Object.values(allData).forEach(item => {
+                if(!canAccessData(item)) return;
+                if(item.status !== 'Selesai') return;
+
+                totalSiswa++;
+                sumNilai += (item.nilai || 0);
+
+                const mapel = item.mapel || 'unknown';
+                const mapelNama = item.mapelNama || mapelNames[mapel] || mapel;
+
+                if(!mapelData[mapel]) {
+                    mapelData[mapel] = { nama: mapelNama, siswa: [], total: 0, sum: 0 };
+                }
+                mapelData[mapel].siswa.push(item);
+                mapelData[mapel].total++;
+                mapelData[mapel].sum += (item.nilai || 0);
+            });
+
+            const statsHtml = `
+                <div class="stat-card highlight">
+                    <div class="stat-num">${Object.keys(mapelData).length}</div>
+                    <div class="stat-label">Mapel Selesai</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num" style="color:var(--accent-blue)">${totalSiswa}</div>
+                    <div class="stat-label">Total Data</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num" style="color:var(--accent-green)">${totalSiswa > 0 ? Math.round(sumNilai / totalSiswa) : 0}</div>
+                    <div class="stat-label">Rata-rata Nilai</div>
+                </div>
+            `;
+            document.getElementById('nilai-stats').innerHTML = statsHtml;
+
+            let cardsHtml = "";
+            Object.keys(mapelData).forEach(mapel => {
+                const m = mapelData[mapel];
+                const rata = m.total > 0 ? Math.round(m.sum / m.total) : 0;
+
+                cardsHtml += `
+                <div class="mapel-card">
+                    <div class="mapel-header" onclick="toggleMapelDetail('${mapel}')">
+                        <span class="mapel-name">${m.nama}</span>
+                        <div class="mapel-stats">
+                            <span><b>${m.total}</b> data</span>
+                            <span>Rata-rata: <b>${rata}</b></span>
+                        </div>
+                    </div>
+                    <div class="mapel-content" id="mapel-content-${mapel}">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr><th>No</th><th>Nama</th><th>PG</th><th>Essay</th><th>Nilai</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${m.siswa.map((s, idx) => `
+                                        <tr>
+                                            <td>${idx + 1}</td>
+                                            <td><b>${s.nama}</b></td>
+                                            <td>${s.nilai_pg || 0}</td>
+                                            <td>${s.nilai_essay || 0}</td>
+                                            <td><b>${s.nilai || 0}</b></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('mapel-cards-container').innerHTML = cardsHtml || "<p style='text-align:center; color:var(--muted);'>Belum ada data nilai</p>";
+            document.getElementById('detail-nilai-container').innerHTML = "";
+        });
+    }
+
+    function toggleMapelDetail(mapel) {
+        const content = document.getElementById(`mapel-content-${mapel}`);
+        document.querySelectorAll('.mapel-content').forEach(el => el.classList.remove('show'));
+        document.querySelectorAll('.mapel-header').forEach(el => el.classList.remove('active'));
+        content.classList.toggle('show');
+        content.previousElementSibling.classList.toggle('active');
+    }
+
+    function loadNilaiGuruMapel() {
+        const filterKelas = document.getElementById('filter-nilai-kelas').value;
+
+        db.ref(`sekolah/${myNPSN}/pengerjaan`).once('value', snap => {
+            const data = snap.val() || {};
+            let h = "";
+            let no = 1;
+            let totalSiswa = 0;
+            let sumNilai = 0;
+
+            Object.values(data).forEach(item => {
+                if(!canAccessData(item)) return;
+                if(item.status !== 'Selesai') return;
+
+                if(filterKelas !== 'semua') {
+                    const kelasNum = filterKelas.replace('kelas_', '').replace('_', '');
+                    if(!(item.kelas || "").toLowerCase().includes(kelasNum)) return;
+                }
+
+                totalSiswa++;
+                sumNilai += (item.nilai || 0);
+
+                h += `<tr>
+                    <td>${no++}</td>
+                    <td><b>${item.nama}</b></td>
+                    <td>${item.kelas || '-'}</td>
+                    <td>${item.mapelNama || mapelNames[item.mapel] || item.mapel || '-'}</td>
+                    <td>${item.nilai_pg || 0}</td>
+                    <td>${item.nilai_essay || 0}</td>
+                    <td><b>${item.nilai || 0}</b></td>
+                </tr>`;
+            });
+
+            const statsHtml = `
+                <div class="stat-card highlight">
+                    <div class="stat-num">${totalSiswa}</div>
+                    <div class="stat-label">Total Data</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num" style="color:var(--accent-green)">${totalSiswa > 0 ? Math.round(sumNilai / totalSiswa) : 0}</div>
+                    <div class="stat-label">Rata-rata Nilai</div>
+                </div>
+            `;
+            document.getElementById('nilai-stats').innerHTML = statsHtml;
+
+            const detailHtml = `
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Detail Nilai Siswa</div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>No</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>PG</th><th>Essay</th><th>Nilai</th></tr>
+                        </thead>
+                        <tbody>${h || "<tr><td colspan='7' style='text-align:center; color:var(--muted);'>Tidak ada data</td></tr>"}</tbody>
+                    </table>
+                </div>
+            </div>`;
+
+            document.getElementById('detail-nilai-container').innerHTML = detailHtml;
+        });
+    }
+
+    // ========== SISWA ==========
+    function loadSiswaForm() {
+        const k = isLockedClass ? myRole : document.getElementById('kelas-select').value;
+        if (!isLockedClass) document.getElementById('kelas-select').value = k;
+        db.ref(`sekolah/${myNPSN}/daftar_siswa/${k}`).once('value', snap => {
+            const d = snap.val() || [];
+            document.getElementById('siswa-text').value = d.join('\n');
+        });
+    }
+
+    function saveSiswa() {
+        const k = isLockedClass ? myRole : document.getElementById('kelas-select').value;
+        const raw = document.getElementById('siswa-text').value;
+        const list = raw.split(/[\n,]+/).map(s => s.trim()).filter(s => s);
+        
+        if(list.length === 0) {
+            alert("Masukkan minimal 1 nama siswa!");
+            return;
+        }
+
+        const kelasNum = k.match(/\d/);
+        const isKelasTinggi = kelasNum && parseInt(kelasNum[0]) >= 4;
+
+        db.ref(`sekolah/${myNPSN}/daftar_siswa/${k}`).set(list).then(() => {
+            
+            let message = "";
+            
+            if (isKelasTinggi) {
+                message = `Berhasil! ${list.length} siswa Kelas Tinggi disimpan (untuk login siswa).`;
+                alert(message);
+                loadSiswaForm();
+            } else {
                 let mapelToCreate = [];
                 
                 if(isGuruMapel) {
-                    // Guru Mapel (PAI/PJOK) - buat entri untuk mapel yang dipegang
                     if(myRole === 'guru_pai') mapelToCreate = ['pai'];
                     if(myRole === 'guru_pjok') mapelToCreate = ['pjok'];
                 } else {
-                    // Wali Kelas - buat entri untuk semua mapel yang dipegang
                     mapelToCreate = [...waliKelasMapel];
                 }
 
-                const kelasKey = k.substring(0, k.length - 1); // kelas_1a -> kelas_1
+                const kelasKey = k.substring(0, k.length - 1); 
                 const updates = {};
                 
                 list.forEach(nama => {
-                    const uid = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                    
                     mapelToCreate.forEach(mapel => {
                         const uidMapel = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                         updates[uidMapel] = {
@@ -2910,74 +2913,74 @@
                             status: 'Perlu Koreksi',
                             createdAt: Date.now(),
                             createdBy: myRole,
-                            manual: true
+                            manual: true 
                         };
                     });
                 });
 
-                // Simpan semua entri pengerjaan
                 if(Object.keys(updates).length > 0) {
                     db.ref(`sekolah/${myNPSN}/pengerjaan`).update(updates).then(() => {
-                        alert(`Berhasil!\n- ${list.length} siswa disimpan\n- ${Object.keys(updates).length} entri pengerjaan dibuat\n- Silakan input nilai di menu "Koreksi Jawaban"`);
+                        alert(`Berhasil!\n- ${list.length} siswa disimpan\n- ${Object.keys(updates).length} entri nilai dibuat\n- Silakan input nilai di menu "Koreksi Jawaban"`);
                         loadSiswaForm();
                     }).catch(e => {
-                        alert("Siswa disimpan, tapi gagal membuat entri pengerjaan: " + e.message);
+                        alert("Siswa disimpan, tapi gagal membuat entri nilai: " + e.message);
                     });
                 } else {
-                    alert(`${list.length} siswa berhasil disimpan!`);
-                    loadSiswaForm();
+                     alert(`${list.length} siswa berhasil disimpan!`);
+                     loadSiswaForm();
                 }
-            }).catch(e => {
-                alert("Gagal menyimpan: " + e.message);
-            });
-        }
+            }
+        }).catch(e => {
+            alert("Gagal menyimpan: " + e.message);
+        });
+    }
 
-        // ========== BANK SOAL ==========
-        function loadBankSoal() {
-            const mapel = document.getElementById('soal-mapel-select').value;
-            const kelas = document.getElementById('soal-kelas-select').value;
-            const container = document.getElementById('bank-soal-display');
-            container.innerHTML = "Memuat soal...";
+    // ========== BANK SOAL ==========
+    function loadBankSoal() {
+        const mapel = document.getElementById('soal-mapel-select').value;
+        const kelas = document.getElementById('soal-kelas-select').value;
+        const container = document.getElementById('bank-soal-display');
+        container.innerHTML = "Memuat soal...";
 
-            db.ref(`admin_pusat/gudang_soal/${mapel}/${kelas}`).once('value', snap => {
-                const data = snap.val();
-                if(!data) {
-                    container.innerHTML = "<p style='color:var(--accent-red);'>Admin Pusat belum mengirim soal untuk mapel & kelas ini.</p>";
-                    return;
+        db.ref(`admin_pusat/gudang_soal/${mapel}/${kelas}`).once('value', snap => {
+            const data = snap.val();
+            if(!data) {
+                container.innerHTML = "<p style='color:var(--accent-red);'>Admin Pusat belum mengirim soal untuk mapel & kelas ini.</p>";
+                return;
+            }
+
+            let html = "";
+            data.forEach((s, i) => {
+                const img = s.img || s.i || "";
+                const tanya = s.tanya || s.pertanyaan || "-";
+                const kunci = (s.kunci || "a").toUpperCase();
+                const isEssay = !s.opsi || s.opsi.length === 0;
+
+                html += `<div class="soal-box">
+                    <div class="soal-nomor">
+                        <span>No. ${i+1}</span>
+                        <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
+                    </div>
+                    <div class="soal-text">${tanya}</div>`;
+
+                if(img) {
+                    html += `<img src="${img}" style="max-width:150px; border-radius:8px; margin:8px 0;">`;
                 }
 
-                let html = "";
-                data.forEach((s, i) => {
-                    const img = s.img || s.i || "";
-                    const tanya = s.tanya || s.pertanyaan || "-";
-                    const kunci = (s.kunci || "a").toUpperCase();
-                    const isEssay = !s.opsi || s.opsi.length === 0;
-
-                    html += `<div class="soal-box">
-                        <div class="soal-nomor">
-                            <span>No. ${i+1}</span>
-                            <span class="soal-tag ${isEssay ? 'essay' : ''}">${isEssay ? 'Uraian' : 'PG'}</span>
-                        </div>
-                        <div class="soal-text">${tanya}</div>`;
-
-                    if(img) {
-                        html += `<img src="${img}" style="max-width:150px; border-radius:8px; margin:8px 0;">`;
-                    }
-
-                    if(!isEssay && s.opsi) {
-                        html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
-                        s.opsi.forEach((o, x) => {
-                            let txt = typeof o === 'object' ? (o.t||o.text) : o;
-                            let c = (String.fromCharCode(97+x) === kunci.toLowerCase()) ? "opsi-benar" : "";
-                            html += `<div class="opsi-item ${c}">${String.fromCharCode(65+x)}. ${txt}</div>`;
-                        });
-                        html += "</div>";
-                    }
-                    html += `<div class="kunci">Kunci: ${isEssay ? s.kunci || '-' : kunci}</div></div>`;
-                });
-                container.innerHTML = html;
+                if(!isEssay && s.opsi) {
+                    html += "<div style='margin-left:5px; font-size:0.85rem; margin-top:10px;'>";
+                    s.opsi.forEach((o, x) => {
+                        let txt = typeof o === 'object' ? (o.t||o.text) : o;
+                        let c = (String.fromCharCode(97+x) === kunci.toLowerCase()) ? "opsi-benar" : "";
+                        html += `<div class="opsi-item ${c}">${String.fromCharCode(65+x)}. ${txt}</div>`;
+                    });
+                    html += "</div>";
+                }
+                html += `<div class="kunci">Kunci: ${isEssay ? s.kunci || '-' : kunci}</div></div>`;
             });
-        }
-    </script>
+            container.innerHTML = html;
+        });
+    }
+</script>
 </body>
 </html>
