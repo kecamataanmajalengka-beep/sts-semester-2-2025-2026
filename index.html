@@ -2992,7 +2992,7 @@
                 const img = s.img || s.i || "";
                 const tanya = s.tanya || s.pertanyaan || "-";
                 const kunci = (s.kunci || "a").toUpperCase();
-                const isEssay = !s.opsi || s.opsi.length === 0;
+                const isEssay = !s.opsi || s.opsi.length === 0; // Variabel diletakkan di dalam loop
 
                 html += `<div class="soal-box">
                     <div class="soal-nomor">
@@ -3014,7 +3014,9 @@
                     });
                     html += "</div>";
                 }
-                html += `<div class="kunci">Kunci: ${isEssay ? s.kunci || '-' : kunci}</div></div>`;
+                
+                // PERBAIKAN DI SINI: Variabel isEssay sudah terdefinisi di atas
+                html += `<div class="kunci">Kunci: ${isEssay ? (s.kunci || '-') : kunci}</div></div>`;
             });
             container.innerHTML = html;
         });
