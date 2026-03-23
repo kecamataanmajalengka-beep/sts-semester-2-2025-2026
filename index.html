@@ -2980,6 +2980,24 @@
         const container = document.getElementById('bank-soal-display');
         container.innerHTML = "Memuat soal...";
 
+        // Di dalam loop menampilkan soal
+const img = s.img || s.i || "";
+// ... setelah menampilkan teks soal ...
+if(img) {
+    html += `<img src="${img}" style="max-width:150px; border-radius:8px; margin:8px 0; display:block;">`;
+}
+
+// Untuk opsi
+s.opsi.forEach((o, x) => {
+    let txt = typeof o === 'object' ? (o.t||o.text) : o;
+    let imgOpsi = typeof o === 'object' ? (o.i||o.img) : '';
+    
+    // Tambahkan gambar opsi jika ada
+    let imgHtml = imgOpsi ? `<img src="${imgOpsi}" style="max-width:50px; max-height:50px; border-radius:4px; margin-left:5px; vertical-align:middle;">` : '';
+    
+    html += `<div class="opsi-item">${String.fromCharCode(65+x)}. ${txt} ${imgHtml}</div>`;
+});
+        
         db.ref(`admin_pusat/gudang_soal/${mapel}/${kelas}`).once('value', snap => {
             const data = snap.val();
             if(!data) {
