@@ -2199,7 +2199,7 @@
         document.getElementById('modal-koreksi-detail').classList.remove('hidden');
     }
 
-    function renderKoreksiKelasTinggi(dataSiswa, soalData) {
+   function renderKoreksiKelasTinggi(dataSiswa, soalData) {
     const jawabanSiswa = dataSiswa.jawaban || {};
     const listContainer = document.getElementById('detail-jawaban-list');
     
@@ -2237,10 +2237,10 @@
             // 1. Indeks numerik (default dari script siswa: "0", "1", "2")
             // 2. Format lama (pg_1, answer_1)
             let jawab = (jawabanSiswa[i] ||                 // Format Indeks Array (Utama)
-                         jawabanSiswa[i.toString()] ||      // Format String Indeks
-                         jawabanSiswa['pg_'+nomor] ||       // Format pg_Nomor
-                         jawabanSiswa['answer_'+nomor] ||   // Format answer_Nomor
-                         "").toString().toLowerCase();
+                             jawabanSiswa[i.toString()] ||      // Format String Indeks
+                             jawabanSiswa['pg_'+nomor] ||       // Format pg_Nomor
+                             jawabanSiswa['answer_'+nomor] ||   // Format answer_Nomor
+                             "").toString().toLowerCase();
             
             if (jawab === kunci) pgBenar++;
 
