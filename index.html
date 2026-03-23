@@ -2199,19 +2199,44 @@
         document.getElementById('modal-koreksi-detail').classList.remove('hidden');
     }
 
-   function renderKoreksiKelasTinggi(dataSiswa, soalData) {
+   // Di dalam fungsi renderKoreksiKelasTinggi(dataSiswa, soalData)
+
+function renderKoreksiKelasTinggi(dataSiswa, soalData) {
     const jawabanSiswa = dataSiswa.jawaban || {};
-    const listContainer = document.getElementById('detail-jawaban-list');
+    // ...
     
-    let pgBenar = 0;
-    let pgTotal = 0;
-    
-    let html = "";
-    
-    // Fix: Pastikan soalData adalah Array (kadang Firebase return Object)
+    // Fix: Pastikan soalData adalah Array
     if (!Array.isArray(soalData)) {
         soalData = Object.values(soalData);
     }
+    
+    soalData.forEach((s, i) => {
+        const isEssay = !s.opsi || s.opsi.length === 0;
+        // ...
+        
+        if (!isEssay) {
+            // === PERBAIKAN UTAMA ===
+            // Kunci jawaban dari bank soal
+            const kunci = (s.kunci || "a").toLowerCase();
+            
+            // Coba ambil jawaban siswa dari berbagai format key
+            // 1. Indeks Array (utama dari script siswa)
+            // 2. String Indeks
+            // 3. Key lama (pg_1)
+            let jawab = (jawabanSiswa[i] || 
+                         jawabanSiswa[i.toString()] || 
+                         jawabanSiswa['pg_'+(i+1)] || 
+                         "").toString().toLowerCase();
+                         
+            if (jawab === kunci) pgBenar++;
+            
+            // ... render opsi ...
+        } else {
+            // Essay logic
+        }
+    });
+    // ...
+}
     
     soalData.forEach((s, i) => {
         const isEssay = !s.opsi || s.opsi.length === 0;
