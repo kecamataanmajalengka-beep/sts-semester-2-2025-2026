@@ -1880,7 +1880,7 @@
             });
             
             myNPSN = n;
-            sekolahNomeCache = info.nome || 'Sekolah';
+            sekolahNamaCache = info.nome || 'Sekolah';
             document.getElementById('confirm-nama-sekolah').innerText = info.nome;
             document.getElementById('form-login').classList.add('hidden');
             document.getElementById('form-pilih-guru').classList.remove('hidden');
@@ -1907,8 +1907,8 @@
                 document.getElementById('lock-badge').style.display = 'none';
             }
             
-            document.getElementById('nama-sekolah').innerText = sekolahNomeCache;
-            document.getElementById('mobile-title').innerText = sekolahNomeCache;
+            document.getElementById('nama-sekolah').innerText = sekolahNamaCache;
+            document.getElementById('mobile-title').innerText = sekolahNamaCache;
             
             const nomeGuru = typeof guruData === 'string' ? guruData : (guruData.nome || 'Guru');
             document.getElementById('info-role').innerText = nomeGuru + " (" + myRole.replace(/_/g, ' ').toUpperCase() + ")";
@@ -2359,7 +2359,7 @@
         
         let html = `<div class="page-a4"><div class="lj-header"><h2>LEMBAR JAWABAN</h2><p><b>STS SEMESTER 2</b></p></div>`;
         if(tgl) html += `<div class="lj-tanggal">Tanggal: <b>${new Date(tgl).toLocaleDateString('id-ID', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</b></div>`;
-        html += `<table class="lj-info-table"><tr><td>Sekolah</td><td class="filled">${sekolahNomeCache}</td></tr><tr><td>Mapel</td><td class="filled"><b>${mapelNome}</b></td></tr><tr><td>Kelas</td><td class="filled"><b>${kelasNome}</b></td></tr><tr><td>Nama</td><td>...........................</td></tr></table>`;
+        html += `<table class="lj-info-table"><tr><td>Sekolah</td><td class="filled">${sekolahNamaCache}</td></tr><tr><td>Mapel</td><td class="filled"><b>${mapelNome}</b></td></tr><tr><td>Kelas</td><td class="filled"><b>${kelasNome}</b></td></tr><tr><td>Nama</td><td>...........................</td></tr></table>`;
         
         if(pg.length > 0) {
             html += `<div class="lj-section-title">A. PILIHAN GANDA</div><div class="lj-pg-grid">`;
@@ -2484,7 +2484,7 @@
                             mapel: mapel,
                             mapelNome: mapelNames[mapel],
                             npsn: myNPSN,
-                            sekolah: sekolahNomeCache,
+                            sekolah: sekolahNamaCache,
                             nilai_pg: 0,
                             nilai_essay: 0,
                             nilai: 0,
