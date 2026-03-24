@@ -1806,10 +1806,11 @@
     </div>
 
 <script>
-    // ========== KONFIGURASI FIREBASE ==========
+    // ========== KONFIGURASI  ==========
+    // PERBAIKAN 1: Nama variabel disamakan
     const firebaseConfig = {
         apiKey: "AIzaSyCLR3DU5dy-2whKSFhUU67IQpEzbUL8-0s",
-        authDomain: "soal-ulangan-97778.firebaseapp.com",
+        authDomain: "soal-ulangan-97778.app.com",
         databaseURL: "https://soal-ulangan-97778-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "soal-ulangan-97778",
         storageBucket: "soal-ulangan-97778.firebasestorage.app",
@@ -1860,7 +1861,7 @@
         db.ref(`daftar_sekolah/${n}`).once('value', snap => {
             if(!snap.exists()) return showError("NPSN tidak terdaftar.");
             const data = snap.val();
-            const info = data.info || { nama: "Sekolah" };
+            const info = data.info || { nome: "Sekolah" };
             const guruList = data.guru || {};
             const selectGuru = document.getElementById('guru-list-select');
             selectGuru.innerHTML = "";
@@ -1874,9 +1875,10 @@
             });
             
             sortedGuru.forEach(([key, g]) => {
+                // PERBAIKAN 2: Variabel disamakan (nama) agar tidak error di HTML
                 const nama = typeof g === 'string' ? g : (g.nome || 'Unknown');
                 const roleText = key.replace(/_/g, ' ').toUpperCase();
-                selectGuru.innerHTML += `<option value="${key}">${nome} (${roleText})</option>`;
+                selectGuru.innerHTML += `<option value="${key}">${nama} (${roleText})</option>`;
             });
             
             myNPSN = n;
@@ -2086,9 +2088,10 @@
 
                 const statusClass = item.status === 'Perlu Koreksi' ? 'status-pending' : 'status-done';
 
+                // PERBAIKAN 3: Menggunakan item.nome agar konsisten dengan data di Firebase
                 h += `<tr>
                     <td>${no++}</td>
-                    <td><b>${item.nama}</b></td>
+                    <td><b>${item.nome}</b></td>
                     <td>${item.kelas || '-'}</td>
                     <td>${item.mapelNome || mapelNames[item.mapel] || item.mapel || '-'}</td>
                     <td>${item.nilai_pg !== undefined ? item.nilai_pg : '-'}</td>
@@ -2147,7 +2150,6 @@
                 if(soalData) {
                     if (!Array.isArray(soalData)) soalData = Object.values(soalData);
                     currentSoalData = soalData;
-                    // PENTING: Kirim data PG dan Essay terpisah
                     renderKoreksiKelasTinggi(data, soalData, data.jawaban || {}, data.jawabanEssay || {});
                 } else {
                     showManualInput(data);
@@ -2190,7 +2192,6 @@
             const isEssay = !s.opsi || s.opsi.length === 0;
             const nomor = i + 1;
             
-            // Gunakan properti standar: tanya, img
             html += `<div class="soal-box">
                 <div class="soal-nomor">
                     <span>No. ${nomor}</span>
@@ -2198,7 +2199,6 @@
                 </div>
                 <div class="soal-text">${s.tanya || '-'}</div>`;
             
-            // Gambar soal utama
             const imgUrl = s.img || '';
             if(imgUrl) {
                 html += `<img src="${imgUrl}" style="max-width:100%; border-radius:8px; margin:8px 0; max-height:200px;">`;
@@ -2212,7 +2212,6 @@
 
                 html += "<div style='margin-top:10px;'>";
                 s.opsi.forEach((o, x) => {
-                    // Opsi bisa berupa object {t, i} atau string
                     let txt = typeof o === 'object' ? (o.t || '') : o;
                     let imgOpsi = typeof o === 'object' ? (o.i || '') : '';
                     
@@ -2317,9 +2316,8 @@
             .catch(e => alert("Gagal: " + e.message));
     }
 
-        // ========== FITUR LAINNYA ==========
+    // ========== FITUR LAINNYA ==========
     
-    // 1. Inisialisasi Lembar Jawaban
     function initLembarJawaban() {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('tanggal-ujian').value = today;
@@ -2329,7 +2327,6 @@
         }
     }
     
-    // 2. Load Soal untuk Lembar Jawaban
     function loadSoalForLembarJawaban() {
         const mapel = document.getElementById('lj-mapel-select').value;
         const kelas = document.getElementById('lj-kelas-select').value;
@@ -2349,7 +2346,6 @@
         });
     }
 
-    // 3. Generate HTML Lembar Jawaban
     function generateLembarJawaban(soal, mapel, kelas) {
         const pg = soal.filter(s => s.opsi && s.opsi.length > 0);
         const es = soal.filter(s => !s.opsi || s.opsi.length === 0);
@@ -2379,7 +2375,6 @@
         document.getElementById('lembar-jawaban-preview').innerHTML = html;
     }
 
-    // 4. Cetak Lembar Jawaban
     function cetakLembarJawaban() {
         const c = document.getElementById('lembar-jawaban-preview').innerHTML;
         const w = window.open('', '_blank');
@@ -2387,7 +2382,6 @@
         w.document.close();
     }
 
-    // 5. Kelola Guru
     function loadKelolaGuru() {
         db.ref(`daftar_sekolah/${myNPSN}/guru`).once('value', snap => {
             const d = snap.val() || {}; let h=""; let n=1;
@@ -2401,7 +2395,6 @@
     }
     function hapusAkunGuru(k) { showKonfirmasi(`Hapus ${k}?`, () => { db.ref(`daftar_sekolah/${myNPSN}/guru/${k}`).remove().then(() => { alert("Hapus sukses"); loadKelolaGuru(); }); }); }
 
-    // 6. Token
     function loadToken() {
         const m = document.getElementById('mapel-select').value;
         db.ref('admin_pusat/live_tokens').on('value', snap => {
@@ -2411,7 +2404,6 @@
         });
     }
 
-    // 7. Panel Nilai
     function loadNilaiPanel() {
         if(isGuruMapel) { document.getElementById('filter-wali-kelas').classList.add('hidden'); document.getElementById('filter-guru-mapel').classList.remove('hidden'); loadNilaiGuruMapel(); }
         else { document.getElementById('filter-wali-kelas').classList.remove('hidden'); document.getElementById('filter-guru-mapel').classList.add('hidden'); loadMapelCards(); }
@@ -2444,7 +2436,6 @@
         });
     }
 
-    // 8. Fitur Siswa
     function loadSiswaForm() { 
         const k = isLockedClass ? myRole : document.getElementById('kelas-select').value; 
         if (!isLockedClass) document.getElementById('kelas-select').value = k; 
@@ -2507,7 +2498,6 @@
         }).catch(e => alert("Gagal: " + e.message)); 
     }
 
-    // 9. Bank Soal
     function loadBankSoal() {
         const m = document.getElementById('soal-mapel-select').value;
         const k = document.getElementById('soal-kelas-select').value;
